@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plexure JSON 產生器</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+        font-family: "Microsoft JhengHei", sans-serif;
+        background-color: #f4f4f4;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .workspace {
+        background-color: #ffffff;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        width: 450px;
+      }
+      h2 {
+        color: #ff6600;
+        margin-bottom: 30px;
+      }
+      .upload-group {
+        margin-bottom: 20px;
+        text-align: left;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #666;
+        font-size: 14px;
+        font-weight: bold;
+      }
+      input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .btn-submit {
+        background-color: #ff6600;
+        color: white;
+        border: none;
+        padding: 15px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+      }
+      .btn-submit:hover {
+        background-color: #e65c00;
+      }
+      #statusMsg {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="workspace">
+      <h2>Plexure 自動化機器人</h2>
+
+      <div class="upload-group">
+        <label for="plexureDataFile">1. 請選擇資料表 (.xlsm 或 .xlsx)：</label>
+        <input type="file" id="plexureDataFile" accept=".xlsx, .xlsm" />
+      </div>
+
+      <div class="upload-group">
+        <label for="plexureModleFile">2. 請選擇模組表 (.xlsm 或 .xlsx)：</label>
+        <input type="file" id="plexureModleFile" accept=".xlsx, .xlsm" />
+      </div>
+
+      <button id="runTransform" class="btn-submit">產出最終 JSON</button>
+      <div id="statusMsg"></div>
+    </div>
+
+    <script>
+      $(document).ready(function () {
+        $("#runTransform").click(function () {
+          var dataFile = $("#plexureDataFile")[0].files[0];
+          var modelFile = $("#plexureModleFile")[0].files[0];
+
+          if (!dataFile || !modelFile) {
+            alert("請確保兩個檔案都已選擇！");
+            return;
+          }
+
+          var formData = new FormData();
+          formData.append("dataFile", dataFile);
+          formData.append("modelFile", modelFile);
+
+          $("#runTransform").prop("disabled", true).text("處理中...");
+          $("#statusMsg").text("正在處理資料並轉換 JSON...");
+
+          $.ajax({
+            url: "/transform",
+            method: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhrFields: { responseType: "blob" },
+            success: function (blob) {
+              var link = document.createElement("a");
+              link.href = window.URL.createObjectURL(blob);
+              link.download = "plexure.json";
+              link.click();
+              $("#statusMsg").text("轉換成功！JSON 已下載。");
+              $("#runTransform").prop("disabled", false).text("產出最終 JSON");
+            },
+            error: function () {
+              alert("轉換失敗，請檢查後端日誌。");
+              $("#runTransform").prop("disabled", false).text("產出最終 JSON");
+            },
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

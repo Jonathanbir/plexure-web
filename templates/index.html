@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plexure 自動化機器人</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+        font-family: "Microsoft JhengHei", sans-serif;
+        background-color: #f4f4f4;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .workspace {
+        background-color: #ffffff;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        width: 400px;
+      }
+      h2 {
+        color: #ff6600;
+        margin-bottom: 30px;
+        font-size: 24px;
+      }
+      .upload-group {
+        margin-bottom: 25px;
+        text-align: left;
+      }
+      label {
+        display: block;
+        margin-bottom: 10px;
+        color: #666;
+        font-size: 14px;
+      }
+      input[type="file"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .btn-submit {
+        background-color: #ff6600;
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        transition: all 0.3s ease;
+        font-weight: bold;
+      }
+      .btn-submit:hover {
+        background-color: #e65c00;
+        box-shadow: 0 4px 12px rgba(255, 102, 0, 0.3);
+        transform: translateY(-2px);
+      }
+      .btn-submit:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+      #statusMsg {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #888;
+      }
+
+      .next-step-btn {
+        margin-top: 15px;
+        background-color: #ccc; /* 初始灰色 */
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: not-allowed; /* 初始禁用手勢 */
+        width: 100%;
+        font-weight: bold;
+        transition: all 0.3s ease;
+      }
+
+      /* 當按鈕被啟用 (解除 disabled) 時的顏色 */
+      .next-step-btn:enabled {
+        background-color: #4caf50; /* 綠色代表前進下一步 */
+        cursor: pointer;
+      }
+
+      .next-step-btn:enabled:hover {
+        background-color: #45a049;
+        transform: translateY(-2px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="workspace">
+      <h2>Plexure 自動化機器人</h2>
+      <div class="upload-group">
+        <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
+        <input
+          type="file"
+          id="plexureFile"
+          accept=".xlsx, .xlsm, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel.sheet.macroEnabled.12"
+        />
+      </div>
+      <button id="runTransform" class="btn-submit">產出自動化表單</button
+      ><button id="nextStepBtn" class="next-step-btn" disabled>
+        前往下一步
+      </button>
+      <div id="statusMsg"></div>
+    </div>
+
+    <script>
+      $(document).ready(function () {
+        $("#runTransform").click(function () {
+          var fileInput = $("#plexureFile")[0];
+          if (fileInput.files.length === 0) {
+            alert("請先選擇檔案！");
+            return;
+          }
+
+          var formData = new FormData();
+          formData.append("file", fileInput.files[0]);
+
+          $("#runTransform").prop("disabled", true).text("處理中...");
+          $("#statusMsg").text("正在轉換資料，請稍候...");
+
+          $.ajax({
+            url: "/transform",
+            method: "POST", // 強制 POST
+            data: formData,
+            processData: false,
+            contentType: false,
+            cache: false,
+            xhrFields: { responseType: "blob" },
+            success: function (blob, status, xhr) {
+              var link = document.createElement("a");
+              link.href = window.URL.createObjectURL(blob);
+              link.download = "data.xlsx";
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              $("#statusMsg").text(
+                "轉換成功！檔案已開始下載，即將進入下一步...",
+              );
+            },
+            error: function (xhr, status, error) {
+              alert("錯誤代碼：" + xhr.status + "\n原因：" + error);
+              $("#statusMsg").text("發生錯誤，請檢查終端機輸出。");
+              $("#runTransform").prop("disabled", false).text("產出自動化表單");
+            },
+          });
+          setTimeout(function () {
+            $("#nextStepBtn").prop("disabled", false);
+            $("#statusMsg").text("檔案已準備就緒，您可以點擊下一步繼續。");
+          }, 1000);
+        });
+        // 點擊「前往下一步」按鈕的行為
+        $("#nextStepBtn").click(function () {
+          window.location.href = "/step2";
+        });
+      });
+    </script>
+  </body>
+</html>
