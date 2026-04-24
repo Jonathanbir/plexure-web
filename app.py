@@ -77,17 +77,21 @@ def perform_transformation(data_stream, model_stream):
     wb_target = openpyxl.load_workbook(model_stream)
     ws_target = wb_target.worksheets[0]
 
-    target_cells_addr = ["E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36",
-                         "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62", 
-                         "E64", "E66", "D69", "E71", "E73", "E75", "E77"]
+    # 【重要修正】更新地址清單順序，以對應新的 data.xlsx 欄位 Q, R, S, T, U...
+    target_cells_addr = [
+        "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", # 0-9
+        "E38", "E40", "E42", "E47", "E52", "E54", # 10-15
+        "E56", "E58", "E60", "E62", # 16-19: Start Date(Q), Daily Start(R), End Date(S), Daily End(T)
+        "E64", "E66", "E71", "E73", # 20-23
+        "D69", "E75", "E77", "E79", "E81" # 24-28 (D69 為 Category)
+    ]
+    
     template_height = 75
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
-    # 1. 填充 Excel 模組
     for data_row in range(2, ws_source.max_row + 1):
         if data_row > 2:
-            # 複製模板塊
             for r_offset in range(template_height):
                 for c in range(1, ws_target.max_column + 1):
                     ws_target.cell(row=next_row + r_offset, column=c).value = \
@@ -95,14 +99,14 @@ def perform_transformation(data_stream, model_stream):
 
         for i, addr in enumerate(target_cells_addr):
             source_col = i + 1
-            if addr == "D69": source_col = 25 # 強制對應 Y 欄
-            
             source_val = str(ws_source.cell(row=data_row, column=source_col).value or "").strip()
+            
             orig_cell = ws_target[addr]
             target_r = orig_cell.row + (next_row - 3)
             target_cell = ws_target.cell(row=target_r, column=orig_cell.column)
             target_cell.number_format = "@"
 
+            # 處理特殊欄位邏輯
             if addr == "D20":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"""
@@ -118,7 +122,6 @@ def perform_transformation(data_stream, model_stream):
         ws_target.cell(row=footer_row, column=5).value = "id=btnSave2"
         next_row = footer_row + 1
 
-    # 2. 產出 JSON
     plexure_json = {
         "Name": int(datetime.datetime.now().strftime("%Y%m%d")),
         "CreationDate": 45951,
@@ -126,7 +129,6 @@ def perform_transformation(data_stream, model_stream):
     }
 
     def inject_start_flow(cmds, url):
-        """對齊 plexure123.json 的起始流程"""
         cmds.append({"Command": "open", "Target": str(url), "Value": ""})
 
     curr_r = 3
@@ -156,7 +158,7 @@ def perform_transformation(data_stream, model_stream):
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 
 # =============================
-# Flask Routes (保持不變)
+# Step 3: Flask Routes (含 transform 邏輯修正)
 # =============================
 
 @app.route('/')
@@ -171,6 +173,8 @@ def transform():
     df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
     df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
     out = pd.DataFrame()
+    
+    # 欄位映射 A-P
     out["Internal Name"] = df.iloc[:, 11]
     out["Base Weight"] = df.iloc[:, 14]
     out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
@@ -186,17 +190,25 @@ def transform():
     out["Percentage"] = ""; out["Img En"] = ""; out["Img Zh"] = ""
     out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
     out["Title CH"] = df.iloc[:, 30].apply(clean_empty_text)
-    out["Start Date"] = pd.to_datetime(df.iloc[:, 9], errors="coerce").dt.strftime("%Y/%m/%d")
-    out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d")
-    out["Daily Start"] = "12:00 AM"; out["Daily End"] = "11:59 PM"
+    
+    # 【重要修正】欄位 Q, R, S, T 順序調整
+    out["Start Date"] = pd.to_datetime(df.iloc[:, 9], errors="coerce").dt.strftime("%Y/%m/%d") # Q
+    out["Daily Start"] = "12:00 AM" # R
+    out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d") # S
+    out["Daily End"] = "11:59 PM" # T
+    
+    # 欄位 U-AC
     time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
-    out["Daily Start Split"] = time_split[0]; out["Daily End Split"] = time_split[1]
-    out["Number of Days"] = 3; out["Specify Expiry"] = "11:59 PM"
-    out["Category"] = df.iloc[:, 38].apply(clean_empty_text) # 這是第 25 欄
+    out["Daily Start Split"] = time_split[0]
+    out["Daily End Split"] = time_split[1]
+    out["Number of Days"] = 3
+    out["Specify Expiry"] = "11:59 PM"
+    out["Category"] = df.iloc[:, 38].apply(clean_empty_text) 
     out["Desc EN"] = df.iloc[:, 40].apply(clean_empty_text)
     out["Terms EN"] = df.iloc[:, 42].apply(clean_empty_text)
     out["Desc ZH"] = df.iloc[:, 39].apply(clean_empty_text)
     out["Terms ZH"] = df.iloc[:, 41].apply(clean_empty_text)
+    
     out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer: out.to_excel(writer, index=False)
