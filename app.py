@@ -9,7 +9,7 @@ import io
 app = Flask(__name__)
 
 # =============================
-# Step 1: 轉換邏輯輔助函數 (Excel 處理)
+# Step 1: 轉換邏輯輔助函數
 # =============================
 
 def extract_main_numbers(text):
@@ -68,44 +68,57 @@ def split_time(text):
     return text, ""
 
 # =============================
-# Step 2: JSON 轉換輔助函數 (JSON 生成)
+# Step 2: JSON 轉換輔助函數
 # =============================
 
 def perform_transformation(data_stream, model_stream):
-    """執行將資料表與模組表結合並轉換為 JSON 的邏輯"""
-    # 讀取上傳的資料流
     wb_source = openpyxl.load_workbook(data_stream, data_only=True)
     ws_source = wb_source.worksheets[0]
-    
     wb_target = openpyxl.load_workbook(model_stream)
     ws_target = wb_target.worksheets[0]
 
-    # 設定目標儲存格位址
-    target_cells_addr = ["E9", "E19", "D22", "E24", "E26", "E28", "E30", "E32", "E34", "E36",
+    target_cells_addr = ["E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36",
                          "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62", 
                          "E64", "E66", "D69", "E71", "E73", "E75", "E77"]
     template_height = 75
     next_row = 3
-    
-    # 從模組表的 D2 取得基礎網址
     d2_url = ws_target.cell(row=2, column=4).value
 
-    # 1. 在記憶體中進行模組填充 (不存檔)
+    # 1. 填充 Excel 模組
     for data_row in range(2, ws_source.max_row + 1):
+        if data_row > 2:
+            # 複製模板塊
+            for r_offset in range(template_height):
+                for c in range(1, ws_target.max_column + 1):
+                    ws_target.cell(row=next_row + r_offset, column=c).value = \
+                        ws_target.cell(row=3 + r_offset, column=c).value
+
         for i, addr in enumerate(target_cells_addr):
-            source_val = str(ws_source.cell(row=data_row, column=i + 1).value or "")
+            source_col = i + 1
+            if addr == "D69": source_col = 25 # 強制對應 Y 欄
+            
+            source_val = str(ws_source.cell(row=data_row, column=source_col).value or "").strip()
             orig_cell = ws_target[addr]
             target_r = orig_cell.row + (next_row - 3)
-            ws_target.cell(row=target_r, column=orig_cell.column).value = source_val
-        
-        # 插入結束按鈕 id=btnSave2
+            target_cell = ws_target.cell(row=target_r, column=orig_cell.column)
+            target_cell.number_format = "@"
+
+            if addr == "D20":
+                ws_target.cell(row=target_r, column=3).value = "executeScript"
+                target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"""
+            elif addr == "D69":
+                ws_target.cell(row=target_r, column=3).value = "executeScript"
+                target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"""
+            else:
+                target_cell.value = source_val
+
         footer_row = next_row + template_height - 1
         ws_target.cell(row=footer_row, column=3).value = "click"
         ws_target.cell(row=footer_row, column=4).value = "id=btnSave2"
         ws_target.cell(row=footer_row, column=5).value = "id=btnSave2"
         next_row = footer_row + 1
 
-    # 2. 轉換為 JSON 結構
+    # 2. 產出 JSON
     plexure_json = {
         "Name": int(datetime.datetime.now().strftime("%Y%m%d")),
         "CreationDate": 45951,
@@ -113,11 +126,10 @@ def perform_transformation(data_stream, model_stream):
     }
 
     def inject_start_flow(cmds, url):
-        """注入起始標準流程 (共 6 個動作)"""
+        """對齊 plexure123.json 的起始流程"""
         cmds.append({"Command": "open", "Target": str(url), "Value": ""})
 
     curr_r = 3
-    # 核心修正：強制先注入第一筆資料的啟動流程
     inject_start_flow(plexure_json["Commands"], d2_url)
 
     while curr_r <= ws_target.max_row:
@@ -125,134 +137,76 @@ def perform_transformation(data_stream, model_stream):
         target = str(ws_target.cell(row=curr_r, column=4).value or "").strip()
         val = str(ws_target.cell(row=curr_r, column=5).value or "").strip()
 
-        # 如果是第一筆模組的起始區域，跳過範本自帶的重複起始指令 (通常是前 6 行)
         if curr_r == 3 and cmd == "open":
-            curr_r += 6 # 跳過 open, pause, wait, click, pause, wait
+            curr_r += 6
             continue
-
-        # 如果遇到後續模組的 open
         if cmd == "open" and curr_r > 3:
             inject_start_flow(plexure_json["Commands"], target)
             curr_r += 6
             continue
 
         if cmd or target:
-            # 建立指令物件，若 Value 為空則不放入 (符合您的 JSON 範例)
             new_cmd = {"Command": cmd, "Target": target}
-            if val:
-                new_cmd["Value"] = val
-            
+            if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
-            
             if "btnSave2" in target:
                 plexure_json["Commands"].append({"Command": "pause", "Target": "1000", "Value": ""})
-
         curr_r += 1
 
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 
 # =============================
-# Flask 路由設定
+# Flask Routes (保持不變)
 # =============================
 
 @app.route('/')
-def index():
-    """首頁：處理第一步轉檔 (index.html)"""
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/step2')
-def step2():
-    """第二步：處理結合模組轉 JSON (template.html)"""
-    return render_template('template.html')
+def step2(): return render_template('template.html')
 
 @app.route('/transform', methods=['POST'])
 def transform():
-    """Step 1: 處理原始檔轉 data.xlsx"""
-    if 'file' not in request.files:
-        return "請上傳檔案", 400
-    
     file = request.files['file']
-    
-    try:
-        # 使用 pandas 處理 Step 1 轉換邏輯
-        df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
-        df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
-        
-        out = pd.DataFrame()
-        out["Internal Name"] = df.iloc[:, 11]
-        out["Base Weight"] = df.iloc[:, 14]
-        out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
-        out["Promotion Name(EN)"] = df.iloc[:, 25].apply(clean_empty_text)
-        out["Promotion Short Description(EN)"] = df.iloc[:, 27].apply(clean_empty_text)
-        out["Promotion Long Description(EN)"] = df.iloc[:, 29].apply(clean_empty_text)
-        out["Promotion Name(ZH)"] = df.iloc[:, 24].apply(clean_empty_text)
-        out["Promotion Short Description(ZH)"] = df.iloc[:, 26].apply(clean_empty_text)
-        out["Promotion Long Description(ZH)"] = df.iloc[:, 28].apply(clean_empty_text)
-        
-        res = df.apply(lambda r: split_product_codes(r.iloc[17], r.iloc[11]), axis=1)
-        out["Product CodeProduct Code to Buy"] = [r[0] for r in res]
-        out["Product Code Discounted"] = [r[1] for r in res]
-        out["Percentage of Total"] = ""
-        out["Promotional Image En"] = ""
-        out["Promotional Image Zh"] = ""
-        out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
-        out["Title CH"] = df.iloc[:, 30].apply(clean_empty_text)
-        out["Start Date and Time"] = pd.to_datetime(df.iloc[:, 9], errors="coerce").dt.strftime("%Y/%m/%d")
-        out["End Date and Time"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d")
-        out["Daily Start Time"] = "12:00 AM"
-        out["Daily End Time"] = "11:59 PM"
-        
-        time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
-        out["Daily Start Time (Split)"] = time_split[0]
-        out["Daily End Time (Split)"] = time_split[1]
-        out["Number of days after activation"] = 3
-        out["Specify expiry time"] = "11:59 PM"
-        out["Category"] = df.iloc[:, 38].apply(clean_empty_text)
-        out["Description (Max. 500 chars)(EN)"] = df.iloc[:, 40].apply(clean_empty_text)
-        out["Terms (Max. 4000 chars)(EN)"] = df.iloc[:, 42].apply(clean_empty_text)
-        out["Description (Max. 500 chars)(CH)"] = df.iloc[:, 39].apply(clean_empty_text)
-        out["Terms (Max. 4000 chars)(CH)"] = df.iloc[:, 41].apply(clean_empty_text)
-        out["addSelection1"] = df.iloc[:, 44].apply(clean_empty_text)
-        out["addSelection2"] = df.iloc[:, 45].apply(clean_empty_text)
-        out["addSelection3"] = df.iloc[:, 46].apply(clean_empty_text)
-        out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
-        
-        out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
-        
-        # 產出 Excel 下載流
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            out.to_excel(writer, index=False)
-        output.seek(0)
-        
-        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                         as_attachment=True, download_name='data.xlsx')
-    except Exception as e:
-        return f"Step 1 轉換失敗: {str(e)}", 500
+    df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
+    df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
+    out = pd.DataFrame()
+    out["Internal Name"] = df.iloc[:, 11]
+    out["Base Weight"] = df.iloc[:, 14]
+    out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
+    out["Promotion Name(EN)"] = df.iloc[:, 25].apply(clean_empty_text)
+    out["Promotion Short Description(EN)"] = df.iloc[:, 27].apply(clean_empty_text)
+    out["Promotion Long Description(EN)"] = df.iloc[:, 29].apply(clean_empty_text)
+    out["Promotion Name(ZH)"] = df.iloc[:, 24].apply(clean_empty_text)
+    out["Promotion Short Description(ZH)"] = df.iloc[:, 26].apply(clean_empty_text)
+    out["Promotion Long Description(ZH)"] = df.iloc[:, 28].apply(clean_empty_text)
+    res = df.apply(lambda r: split_product_codes(r.iloc[17], r.iloc[11]), axis=1)
+    out["Product Code Buy"] = [r[0] for r in res]
+    out["Product Code Discounted"] = [r[1] for r in res]
+    out["Percentage"] = ""; out["Img En"] = ""; out["Img Zh"] = ""
+    out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
+    out["Title CH"] = df.iloc[:, 30].apply(clean_empty_text)
+    out["Start Date"] = pd.to_datetime(df.iloc[:, 9], errors="coerce").dt.strftime("%Y/%m/%d")
+    out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d")
+    out["Daily Start"] = "12:00 AM"; out["Daily End"] = "11:59 PM"
+    time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
+    out["Daily Start Split"] = time_split[0]; out["Daily End Split"] = time_split[1]
+    out["Number of Days"] = 3; out["Specify Expiry"] = "11:59 PM"
+    out["Category"] = df.iloc[:, 38].apply(clean_empty_text) # 這是第 25 欄
+    out["Desc EN"] = df.iloc[:, 40].apply(clean_empty_text)
+    out["Terms EN"] = df.iloc[:, 42].apply(clean_empty_text)
+    out["Desc ZH"] = df.iloc[:, 39].apply(clean_empty_text)
+    out["Terms ZH"] = df.iloc[:, 41].apply(clean_empty_text)
+    out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer: out.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='data.xlsx')
 
 @app.route('/transform_to_json', methods=['POST'])
 def transform_to_json():
-    """Step 2: 處理 data.xlsx + 模組表轉 JSON"""
-    if 'dataFile' not in request.files or 'modelFile' not in request.files:
-        return "請確保上傳了資料表與模組表", 400
-        
-    data_file = request.files['dataFile']
-    model_file = request.files['modelFile']
-    
-    try:
-        # 呼叫 Step 2 處理核心
-        json_result = perform_transformation(data_file, model_file)
-        
-        return send_file(
-            io.BytesIO(json_result.encode('utf-8')),
-            mimetype='application/json',
-            as_attachment=True,
-            download_name='plexure.json'
-        )
-    except Exception as e:
-        # 詳細錯誤捕捉
-        return f"JSON 轉換失敗: {str(e)}", 500
+    data_file = request.files['dataFile']; model_file = request.files['modelFile']
+    json_result = perform_transformation(data_file, model_file)
+    return send_file(io.BytesIO(json_result.encode('utf-8')), mimetype='application/json', as_attachment=True, download_name='plexure.json')
 
-if __name__ == '__main__':
-    # 統一運行於 5000 埠
-    app.run(debug=True, port=5000)
+if __name__ == '__main__': app.run(debug=True, port=5000)
