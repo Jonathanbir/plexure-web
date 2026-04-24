@@ -69,7 +69,7 @@
   </head>
   <body>
     <div class="workspace">
-      <h2>Plexure 自動化機器人</h2>
+      <h2>Plexure 自動化機器人 Step2</h2>
 
       <div class="upload-group">
         <label for="plexureDataFile">1. 請選擇資料表 (.xlsm 或 .xlsx)：</label>
@@ -100,29 +100,37 @@
           formData.append("dataFile", dataFile);
           formData.append("modelFile", modelFile);
 
+          // 1. 狀態更新
           $("#runTransform").prop("disabled", true).text("處理中...");
-          $("#statusMsg").text("正在處理資料並轉換 JSON...");
+          $("#statusMsg").text("正在處理資料並產出 JSON...");
 
-          $.ajax({
-            url: "/transform",
+          // 2. 使用 fetch 取代 $.ajax 避免 200 解析錯誤
+          fetch("/transform_to_json", {
             method: "POST",
-            data: formData,
-            processData: false,
-            contentType: false,
-            xhrFields: { responseType: "blob" },
-            success: function (blob) {
+            body: formData,
+          })
+            .then((response) => {
+              if (!response.ok)
+                throw new Error("網路回應不正確，代碼：" + response.status);
+              return response.blob();
+            })
+            .then((blob) => {
+              // 3. 下載動作
               var link = document.createElement("a");
               link.href = window.URL.createObjectURL(blob);
               link.download = "plexure.json";
               link.click();
+
+              // 4. 成功後恢復按鈕
               $("#statusMsg").text("轉換成功！JSON 已下載。");
               $("#runTransform").prop("disabled", false).text("產出最終 JSON");
-            },
-            error: function () {
-              alert("轉換失敗，請檢查後端日誌。");
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+              alert("轉換失敗！原因：" + error.message);
+              $("#statusMsg").text("發生錯誤，請檢查後端日誌。");
               $("#runTransform").prop("disabled", false).text("產出最終 JSON");
-            },
-          });
+            });
         });
       });
     </script>
