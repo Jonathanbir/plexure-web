@@ -82,8 +82,8 @@ def perform_transformation(data_stream, model_stream):
         "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", # 0-9
         "E38", "E40", "E42", "E47", "E52", "E54", # 10-15
         "E56", "E58", "E60", "E62", # 16-19: Start Date(Q), Daily Start(R), End Date(S), Daily End(T)
-        "E64", "E66", "E71", "E73", # 20-23
-        "D69", "E75", "E77", "E79", "E81" # 24-28 (D69 為 Category)
+        "E64", "E66", "D69", "E71", "E73", # 20-23
+        "E75", "E77" # 24-28 (D69 為 Category)
     ]
     
     template_height = 75
@@ -173,6 +173,9 @@ def transform():
     df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
     df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
     out = pd.DataFrame()
+
+    # 本地圖片路徑設定
+    image_base_path = "/Users/jontsao/Desktop/images/"
     
     # 欄位映射 A-P
     out["Internal Name"] = df.iloc[:, 11]
@@ -187,7 +190,16 @@ def transform():
     res = df.apply(lambda r: split_product_codes(r.iloc[17], r.iloc[11]), axis=1)
     out["Product Code Buy"] = [r[0] for r in res]
     out["Product Code Discounted"] = [r[1] for r in res]
-    out["Percentage"] = ""; out["Img En"] = ""; out["Img Zh"] = ""
+    out["Percentage"] = "1%"
+
+    # AX 欄位索引為 49，AY 欄位索引為 50
+    out["Promotional Image En"] = df.iloc[:, 49].apply(
+        lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else ""
+    ) # Column 14 (N)
+    out["Promotional Image Zh"] = df.iloc[:, 50].apply(
+        lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else ""
+    ) # Column 15 (O)
+    
     out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
     out["Title CH"] = df.iloc[:, 30].apply(clean_empty_text)
     
@@ -201,13 +213,18 @@ def transform():
     time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
     out["Daily Start Split"] = time_split[0]
     out["Daily End Split"] = time_split[1]
-    out["Number of Days"] = 3
-    out["Specify Expiry"] = "11:59 PM"
+    # out["Number of Days"] = 3
+    # out["Specify Expiry"] = "11:59 PM"
     out["Category"] = df.iloc[:, 38].apply(clean_empty_text) 
     out["Desc EN"] = df.iloc[:, 40].apply(clean_empty_text)
     out["Terms EN"] = df.iloc[:, 42].apply(clean_empty_text)
     out["Desc ZH"] = df.iloc[:, 39].apply(clean_empty_text)
     out["Terms ZH"] = df.iloc[:, 41].apply(clean_empty_text)
+
+    out["addSelection1"] = df.iloc[:, 44].apply(clean_empty_text)
+    out["addSelection2"] = df.iloc[:, 45].apply(clean_empty_text)
+    out["addSelection3"] = df.iloc[:, 46].apply(clean_empty_text)
+    out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
     
     out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
     output = io.BytesIO()
