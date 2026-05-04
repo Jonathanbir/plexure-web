@@ -77,16 +77,17 @@ def perform_transformation(data_stream, model_stream):
     wb_target = openpyxl.load_workbook(model_stream)
     ws_target = wb_target.worksheets[0]
 
-    # 【重要修正】更新地址清單順序，以對應新的 data.xlsx 欄位 Q, R, S, T, U...
+    # 地址清單：最後一項 E77 對應 Terms ZH
     target_cells_addr = [
         "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", # 0-9
         "E38", "E40", "E42", "E47", "E52", "E54", # 10-15
-        "E56", "E58", "E60", "E62", # 16-19: Start Date(Q), Daily Start(R), End Date(S), Daily End(T)
-        "E64", "E66", "D69", "E71", "E73", # 20-23
-        "E75", "E77" # 24-28 (D69 為 Category)
+        "E56", "E58", "E60", "E62", # 16-19
+        "E64", "E66", "D69", "E71", "E73", # 20-24
+        "E75", "E77" # 25-26
     ]
     
-    template_height = 75
+    # 【修正點 1】高度增加到 76，防止 Save 按鈕與 E77 欄位重疊
+    template_height = 76
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
@@ -113,15 +114,25 @@ def perform_transformation(data_stream, model_stream):
             elif addr == "D69":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"""
+            
+            # 【修正點 2】針對 Terms ZH (E77) 強制寫入 type 指令與預設文字
+            elif addr == "E77":
+                ws_target.cell(row=target_r, column=3).value = "type"
+                ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
+                if not source_val or source_val == "nan" or source_val == "":
+                    source_val = "每券限兌換一次。每筆交易可以同時使用多張不同品項之回饋券或優惠券。"
+                target_cell.value = source_val
             else:
                 target_cell.value = source_val
 
+        # 設定儲存按鈕位置（現在會是第 78 行，不會蓋掉條款）
         footer_row = next_row + template_height - 1
         ws_target.cell(row=footer_row, column=3).value = "click"
         ws_target.cell(row=footer_row, column=4).value = "id=btnSave2"
         ws_target.cell(row=footer_row, column=5).value = "id=btnSave2"
         next_row = footer_row + 1
 
+    # 生成 JSON
     plexure_json = {
         "Name": int(datetime.datetime.now().strftime("%Y%m%d")),
         "CreationDate": 45951,
@@ -151,6 +162,7 @@ def perform_transformation(data_stream, model_stream):
             new_cmd = {"Command": cmd, "Target": target}
             if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
+            # 在儲存後加入暫停
             if "btnSave2" in target:
                 plexure_json["Commands"].append({"Command": "pause", "Target": "1000", "Value": ""})
         curr_r += 1
@@ -158,7 +170,7 @@ def perform_transformation(data_stream, model_stream):
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 
 # =============================
-# Step 3: Flask Routes (含 transform 邏輯修正)
+# Step 3: Flask Routes
 # =============================
 
 @app.route('/')
@@ -174,10 +186,8 @@ def transform():
     df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
     out = pd.DataFrame()
 
-    # 本地圖片路徑設定
     image_base_path = "/Users/jontsao/Desktop/images/"
     
-    # 欄位映射 A-P
     out["Internal Name"] = df.iloc[:, 11]
     out["Base Weight"] = df.iloc[:, 14]
     out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
@@ -187,34 +197,26 @@ def transform():
     out["Promotion Name(ZH)"] = df.iloc[:, 24].apply(clean_empty_text)
     out["Promotion Short Description(ZH)"] = df.iloc[:, 26].apply(clean_empty_text)
     out["Promotion Long Description(ZH)"] = df.iloc[:, 28].apply(clean_empty_text)
+    
     res = df.apply(lambda r: split_product_codes(r.iloc[17], r.iloc[11]), axis=1)
     out["Product Code Buy"] = [r[0] for r in res]
     out["Product Code Discounted"] = [r[1] for r in res]
     out["Percentage"] = "1%"
 
-    # AX 欄位索引為 49，AY 欄位索引為 50
-    out["Promotional Image En"] = df.iloc[:, 49].apply(
-        lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else ""
-    ) # Column 14 (N)
-    out["Promotional Image Zh"] = df.iloc[:, 50].apply(
-        lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else ""
-    ) # Column 15 (O)
+    out["Promotional Image En"] = df.iloc[:, 49].apply(lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else "")
+    out["Promotional Image Zh"] = df.iloc[:, 50].apply(lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else "")
     
     out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
     out["Title CH"] = df.iloc[:, 30].apply(clean_empty_text)
     
-    # 【重要修正】欄位 Q, R, S, T 順序調整
-    out["Start Date"] = pd.to_datetime(df.iloc[:, 9], errors="coerce").dt.strftime("%Y/%m/%d") # Q
-    out["Daily Start"] = "12:00 AM" # R
-    out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d") # S
-    out["Daily End"] = "11:59 PM" # T
+    out["Start Date"] = pd.to_datetime(df.iloc[:, 9], errors="coerce").dt.strftime("%Y/%m/%d")
+    out["Daily Start"] = "12:00 AM"
+    out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d")
+    out["Daily End"] = "11:59 PM"
     
-    # 欄位 U-AC
     time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
     out["Daily Start Split"] = time_split[0]
     out["Daily End Split"] = time_split[1]
-    # out["Number of Days"] = 3
-    # out["Specify Expiry"] = "11:59 PM"
     out["Category"] = df.iloc[:, 38].apply(clean_empty_text) 
     out["Desc EN"] = df.iloc[:, 40].apply(clean_empty_text)
     out["Terms EN"] = df.iloc[:, 42].apply(clean_empty_text)
@@ -234,8 +236,10 @@ def transform():
 
 @app.route('/transform_to_json', methods=['POST'])
 def transform_to_json():
-    data_file = request.files['dataFile']; model_file = request.files['modelFile']
+    data_file = request.files['dataFile']
+    model_file = request.files['modelFile']
     json_result = perform_transformation(data_file, model_file)
     return send_file(io.BytesIO(json_result.encode('utf-8')), mimetype='application/json', as_attachment=True, download_name='plexure.json')
 
-if __name__ == '__main__': app.run(debug=True, port=5000)
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
