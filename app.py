@@ -59,13 +59,22 @@ def split_product_codes(r_text, promo_text):
     result = "|".join(codes)
     return result, result
 
+# 【核心修正點】調整 split_time 確保回傳 "Nan" 而非空白
 def split_time(text):
     text = str(text).strip()
-    if text.upper() == "NA" or text == "": return "NA", "NA"
+    # 如果輸入為空、NA 或 nan 字串，直接回傳 Nan, Nan
+    if text.upper() == "NA" or text == "" or text.lower() == "nan": 
+        return "Nan", "Nan"
+    
     if "-" in text:
         parts = text.split("-")
-        return parts[0].strip(), parts[1].strip()
-    return text, ""
+        start = parts[0].strip()
+        end = parts[1].strip() if len(parts) > 1 else "Nan"
+        # 若分割後其中一段為空，補上 Nan
+        return (start if start else "Nan"), (end if end else "Nan")
+    
+    # 若沒有分隔符號，則第一項為原文字，第二項為 Nan
+    return text, "Nan"
 
 # =============================
 # Step 2: JSON 轉換輔助函數
@@ -77,7 +86,6 @@ def perform_transformation(data_stream, model_stream):
     wb_target = openpyxl.load_workbook(model_stream)
     ws_target = wb_target.worksheets[0]
 
-    # 地址清單：最後一項 E77 對應 Terms ZH
     target_cells_addr = [
         "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", # 0-9
         "E38", "E40", "E42", "E47", "E52", "E54", # 10-15
@@ -86,7 +94,6 @@ def perform_transformation(data_stream, model_stream):
         "E75", "E77" # 25-26
     ]
     
-    # 【修正點 1】高度增加到 76，防止 Save 按鈕與 E77 欄位重疊
     template_height = 76
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
@@ -107,15 +114,12 @@ def perform_transformation(data_stream, model_stream):
             target_cell = ws_target.cell(row=target_r, column=orig_cell.column)
             target_cell.number_format = "@"
 
-            # 處理特殊欄位邏輯
             if addr == "D20":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"""
             elif addr == "D69":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"""
-            
-            # 【修正點 2】針對 Terms ZH (E77) 強制寫入 type 指令與預設文字
             elif addr == "E77":
                 ws_target.cell(row=target_r, column=3).value = "type"
                 ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
@@ -125,14 +129,12 @@ def perform_transformation(data_stream, model_stream):
             else:
                 target_cell.value = source_val
 
-        # 設定儲存按鈕位置（現在會是第 78 行，不會蓋掉條款）
         footer_row = next_row + template_height - 1
         ws_target.cell(row=footer_row, column=3).value = "click"
         ws_target.cell(row=footer_row, column=4).value = "id=btnSave2"
         ws_target.cell(row=footer_row, column=5).value = "id=btnSave2"
         next_row = footer_row + 1
 
-    # 生成 JSON
     plexure_json = {
         "Name": int(datetime.datetime.now().strftime("%Y%m%d")),
         "CreationDate": 45951,
@@ -162,7 +164,6 @@ def perform_transformation(data_stream, model_stream):
             new_cmd = {"Command": cmd, "Target": target}
             if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
-            # 在儲存後加入暫停
             if "btnSave2" in target:
                 plexure_json["Commands"].append({"Command": "pause", "Target": "1000", "Value": ""})
         curr_r += 1
@@ -214,9 +215,11 @@ def transform():
     out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d")
     out["Daily End"] = "11:59 PM"
     
+    # 這裡會產出 U 與 V 欄位，使用修正後的 split_time
     time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
     out["Daily Start Split"] = time_split[0]
     out["Daily End Split"] = time_split[1]
+    
     out["Category"] = df.iloc[:, 38].apply(clean_empty_text) 
     out["Desc EN"] = df.iloc[:, 40].apply(clean_empty_text)
     out["Terms EN"] = df.iloc[:, 42].apply(clean_empty_text)
