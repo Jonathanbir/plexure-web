@@ -134,6 +134,22 @@
     <div class="workspace">
       <h2>Plexure 自動化機器人 Step1</h2>
       <div class="upload-group">
+        <label for="imagePath">圖片路徑</label>
+        <input
+          type="text"
+          id="imagePath"
+          placeholder="請輸入圖片存放資料夾路徑"
+          style="
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+          "
+          value=""
+        />
+      </div>
+      <div class="upload-group">
         <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
         <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
       </div>
@@ -154,17 +170,30 @@
       $(document).ready(function () {
         // 1. 點擊產出
         $("#runTransform").click(function () {
-          var fileInput = $("#plexureFile")[0];
-          if (fileInput.files.length === 0) {
-            alert("請先選擇檔案！");
+          // 1. 取得輸入框的值並去掉前後空格
+          var file = $("#plexureFile")[0].files[0];
+          var imagePath = $("#imagePath").val().trim();
+
+          // 2. 防呆判斷：檢查圖片路徑
+          if (!imagePath) {
+            alert("請填圖片路徑");
+            $("#imagePath").focus(); // 自動幫使用者點擊輸入框
             return;
           }
 
-          var formData = new FormData();
-          formData.append("file", fileInput.files[0]);
+          // 3. 防呆判斷：檢查檔案
+          if (!file) {
+            alert("請先選擇原始 plexure.xlsm 檔案！");
+            return;
+          }
 
-          $(this).prop("disabled", true).text("處理中...");
-          $("#statusMsg").text("正在轉換資料，請稍候...");
+          // 4. 通過檢查，開始執行 AJAX
+          var formData = new FormData();
+          formData.append("file", file);
+          formData.append("imagePath", imagePath);
+
+          $("#runTransform").prop("disabled", true).text("處理中...");
+          $("#statusMsg").text("正在讀取檔案並轉換路徑...");
 
           $.ajax({
             url: "/transform",
@@ -174,15 +203,11 @@
             contentType: false,
             xhrFields: { responseType: "blob" },
             success: function (blob) {
-              // 下載檔案
               var link = document.createElement("a");
               link.href = window.URL.createObjectURL(blob);
               link.download = "data.xlsx";
-              document.body.appendChild(link);
               link.click();
-              document.body.removeChild(link);
 
-              // 顯示確認區域
               $("#runTransform").text("再次產出表單").prop("disabled", false);
               $(".btn-region").css("display", "flex");
               $("#statusMsg").text("請確認是否已成功下載並存檔。");

@@ -45,7 +45,9 @@ def get_extended_template(text):
 def clean_empty_text(val):
     if pd.isna(val): return ""
     val_str = str(val).strip()
-    return "" if val_str == "00:00:00" or val_str == "" else val
+    if val_str.lower() in ["", "nan", "none", "00:00:00", "0", "0.0"]:
+        return ""
+    return val_str
 
 def split_product_codes(r_text, promo_text):
     codes = extract_main_numbers(r_text)
@@ -59,21 +61,15 @@ def split_product_codes(r_text, promo_text):
     result = "|".join(codes)
     return result, result
 
-# 【核心修正點】調整 split_time 確保回傳 "Nan" 而非空白
 def split_time(text):
     text = str(text).strip()
-    # 如果輸入為空、NA 或 nan 字串，直接回傳 Nan, Nan
     if text.upper() == "NA" or text == "" or text.lower() == "nan": 
         return "Nan", "Nan"
-    
     if "-" in text:
         parts = text.split("-")
         start = parts[0].strip()
         end = parts[1].strip() if len(parts) > 1 else "Nan"
-        # 若分割後其中一段為空，補上 Nan
         return (start if start else "Nan"), (end if end else "Nan")
-    
-    # 若沒有分隔符號，則第一項為原文字，第二項為 Nan
     return text, "Nan"
 
 # =============================
@@ -87,14 +83,14 @@ def perform_transformation(data_stream, model_stream):
     ws_target = wb_target.worksheets[0]
 
     target_cells_addr = [
-        "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", # 0-9
-        "E38", "E40", "E42", "E47", "E52", "E54", # 10-15
-        "E56", "E58", "E60", "E62", # 16-19
-        "E64", "E66", "D69", "E71", "E73", # 20-24
-        "E75", "E77" # 25-26
+        "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36",
+        "E38", "E40", "E42", "E47", "E52", "E54",
+        "E56", "E58", "E60", "E62",
+        "E64", "E66", "D69", "E71", "E73",
+        "E75", "E77" 
     ]
     
-    template_height = 76
+    template_height = 76 
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
@@ -116,14 +112,14 @@ def perform_transformation(data_stream, model_stream):
 
             if addr == "D20":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
-                target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"""
+                target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"
             elif addr == "D69":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
-                target_cell.value = f"""var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"""
+                target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"
             elif addr == "E77":
                 ws_target.cell(row=target_r, column=3).value = "type"
                 ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
-                if not source_val or source_val == "nan" or source_val == "":
+                if not source_val or source_val.lower() == "nan":
                     source_val = "每券限兌換一次。每筆交易可以同時使用多張不同品項之回饋券或優惠券。"
                 target_cell.value = source_val
             else:
@@ -183,12 +179,21 @@ def step2(): return render_template('template.html')
 @app.route('/transform', methods=['POST'])
 def transform():
     file = request.files['file']
+    # 【核心修正】接收前端路徑
+    image_base_path = request.form.get('imagePath', "").strip()
+    if image_base_path and not image_base_path.endswith(('/', '\\')):
+        image_base_path += "/"
+
     df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
     df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
     out = pd.DataFrame()
 
-    image_base_path = "/Users/jontsao/Desktop/images/"
-    
+    def get_full_image_path(val):
+        cleaned = clean_empty_text(val)
+        if cleaned == "":
+            return ""
+        return f"{image_base_path}{cleaned}"
+
     out["Internal Name"] = df.iloc[:, 11]
     out["Base Weight"] = df.iloc[:, 14]
     out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
@@ -204,8 +209,8 @@ def transform():
     out["Product Code Discounted"] = [r[1] for r in res]
     out["Percentage"] = "1%"
 
-    out["Promotional Image En"] = df.iloc[:, 49].apply(lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else "")
-    out["Promotional Image Zh"] = df.iloc[:, 50].apply(lambda x: f"{image_base_path}{clean_empty_text(x)}" if clean_empty_text(x) else "")
+    out["Promotional Image En"] = df.iloc[:, 49].apply(get_full_image_path)
+    out["Promotional Image Zh"] = df.iloc[:, 50].apply(get_full_image_path)
     
     out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
     out["Title CH"] = df.iloc[:, 30].apply(clean_empty_text)
@@ -215,7 +220,6 @@ def transform():
     out["End Date"] = pd.to_datetime(df.iloc[:, 10], errors="coerce").dt.strftime("%Y/%m/%d")
     out["Daily End"] = "11:59 PM"
     
-    # 這裡會產出 U 與 V 欄位，使用修正後的 split_time
     time_split = df.iloc[:, 34].apply(lambda x: pd.Series(split_time(x)))
     out["Daily Start Split"] = time_split[0]
     out["Daily End Split"] = time_split[1]
@@ -232,8 +236,11 @@ def transform():
     out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
     
     out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
+    
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer: out.to_excel(writer, index=False)
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        out.to_excel(writer, index=False)
+        
     output.seek(0)
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='data.xlsx')
 
