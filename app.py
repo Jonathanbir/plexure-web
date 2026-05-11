@@ -94,6 +94,7 @@ def perform_transformation(data_stream, model_stream):
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
+    # 1. 填寫 Excel 樣板邏輯
     for data_row in range(2, ws_source.max_row + 1):
         if data_row > 2:
             for r_offset in range(template_height):
@@ -104,7 +105,6 @@ def perform_transformation(data_stream, model_stream):
         for i, addr in enumerate(target_cells_addr):
             source_col = i + 1
             source_val = str(ws_source.cell(row=data_row, column=source_col).value or "").strip()
-            
             orig_cell = ws_target[addr]
             target_r = orig_cell.row + (next_row - 3)
             target_cell = ws_target.cell(row=target_r, column=orig_cell.column)
@@ -131,6 +131,7 @@ def perform_transformation(data_stream, model_stream):
         ws_target.cell(row=footer_row, column=5).value = "id=btnSave2"
         next_row = footer_row + 1
 
+    # 2. 轉換為 JSON 邏輯
     plexure_json = {
         "Name": int(datetime.datetime.now().strftime("%Y%m%d")),
         "CreationDate": 45951,
@@ -142,6 +143,9 @@ def perform_transformation(data_stream, model_stream):
 
     curr_r = 3
     inject_start_flow(plexure_json["Commands"], d2_url)
+
+    # 用來記錄當前這組優惠使用的是哪個模組
+    current_template_name = ""
 
     while curr_r <= ws_target.max_row:
         cmd = str(ws_target.cell(row=curr_r, column=3).value or "").strip()
@@ -156,10 +160,35 @@ def perform_transformation(data_stream, model_stream):
             curr_r += 6
             continue
 
+        # --- 【核心修正點：追蹤模組名稱】 ---
+        # 檢查是否為 D20 產出的模板選擇腳本
+        if "ExtendedDataTemplateSelector" in target and cmd == "executeScript":
+            match = re.search(r"var targetText = '(.*?)';", target)
+            if match:
+                current_template_name = match.group(1)
+
         if cmd or target:
             new_cmd = {"Command": cmd, "Target": target}
             if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
+
+            # --- 【核心修正點：注入特殊邏輯】 ---
+            # 當遇到 DynamicFields_8__Value 且為 type 指令時
+            if "ExtendedDataDynamicFields_8__Value" in target and cmd == "type":
+                # 判斷模組是否為指定的那一個
+                special_template = "MPA TW Discount Off Product(Percentage) Pre tax False"
+                if current_template_name == special_template:
+                    # 自動追加 click 9 與 type 9
+                    plexure_json["Commands"].append({
+                        "Command": "click",
+                        "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value"
+                    })
+                    plexure_json["Commands"].append({
+                        "Command": "type",
+                        "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value",
+                        "Value": "0"
+                    })
+
             if "btnSave2" in target:
                 plexure_json["Commands"].append({"Command": "pause", "Target": "1000", "Value": ""})
         curr_r += 1
@@ -179,7 +208,6 @@ def step2(): return render_template('template.html')
 @app.route('/transform', methods=['POST'])
 def transform():
     file = request.files['file']
-    # 【核心修正】接收前端路徑
     image_base_path = request.form.get('imagePath', "").strip()
     if image_base_path and not image_base_path.endswith(('/', '\\')):
         image_base_path += "/"
@@ -190,8 +218,7 @@ def transform():
 
     def get_full_image_path(val):
         cleaned = clean_empty_text(val)
-        if cleaned == "":
-            return ""
+        if cleaned == "": return ""
         return f"{image_base_path}{cleaned}"
 
     out["Internal Name"] = df.iloc[:, 11]
@@ -236,11 +263,9 @@ def transform():
     out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
     
     out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
-    
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         out.to_excel(writer, index=False)
-        
     output.seek(0)
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='data.xlsx')
 
