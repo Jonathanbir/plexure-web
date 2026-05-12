@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Plexure 自動化腳本產出結果</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f7f6;
+        margin: 0;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .container {
+        width: 90%;
+        max-width: 1000px;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      }
+
+      /* 新增：標題與複製按鈕的容器 */
+      .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+      h2 {
+        color: #333;
+        margin: 0;
+      }
+
+      /* JSON 顯示區域樣式 */
+      #jsonViewer {
+        background-color: #282c34;
+        color: #abb2bf;
+        padding: 20px;
+        border-radius: 8px;
+        overflow: auto;
+        max-height: 500px;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        border: 1px solid #ddd;
+      }
+
+      .btn-group {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+        gap: 20px;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-align: center;
+        text-decoration: none;
+      }
+
+      /* 複製按鈕樣式 (綠色) */
+      .btn-copy {
+        background-color: #ff6600;
+        color: white;
+      }
+      .btn-copy:hover {
+        background-color: #c24e01;
+      }
+
+      .btn-back {
+        flex: 1;
+        background-color: #6c757d;
+        color: white;
+        padding: 15px; /* 下方大按鈕維持較大尺寸 */
+      }
+      .btn-back:hover {
+        background-color: #5a6268;
+      }
+
+      .btn-download {
+        flex: 1;
+        background-color: #ff6600;
+        color: white;
+        padding: 15px;
+      }
+      .btn-download:hover {
+        background-color: #c24e01;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header-row">
+        <h2>產出的 Plexure.json 預覽</h2>
+        <button id="copyBtn" class="btn btn-copy">複製 JSON</button>
+      </div>
+
+      <pre id="jsonViewer">{{ json_content }}</pre>
+
+      <div class="btn-group">
+        <a href="/step2" class="btn btn-back">重新產 JSON</a>
+        <button id="downloadBtn" class="btn btn-download">
+          下載 JSON 檔案
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // 1. 複製 JSON 的邏輯
+      document.getElementById("copyBtn").addEventListener("click", function () {
+        const jsonText = document.getElementById("jsonViewer").textContent;
+
+        // 使用現代瀏覽器的 Clipboard API
+        navigator.clipboard
+          .writeText(jsonText)
+          .then(() => {
+            const copyBtn = document.getElementById("copyBtn");
+            const originalText = copyBtn.textContent;
+
+            // 變更按鈕文字作為回饋
+            copyBtn.textContent = "已複製！";
+            copyBtn.style.backgroundColor = "#c24e01";
+
+            // 1.5 秒後恢復原狀
+            setTimeout(() => {
+              copyBtn.textContent = originalText;
+              copyBtn.style.backgroundColor = "#ff6600";
+            }, 1500);
+          })
+          .catch((err) => {
+            alert("複製失敗: ", err);
+          });
+      });
+
+      // 2. 下載 JSON 的邏輯
+      document
+        .getElementById("downloadBtn")
+        .addEventListener("click", function () {
+          const jsonText = document.getElementById("jsonViewer").textContent;
+          const blob = new Blob([jsonText], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "plexure.json";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+    </script>
+  </body>
+</html>

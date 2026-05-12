@@ -68,22 +68,42 @@
     </style>
   </head>
   <body>
-    <div class="workspace">
-      <h2>Plexure 自動化機器人 Step2</h2>
-
-      <div class="upload-group">
-        <label for="plexureDataFile">1. 請選擇資料表 (.xlsm 或 .xlsx)：</label>
-        <input type="file" id="plexureDataFile" accept=".xlsx, .xlsm" />
+    <form
+      id="jsonForm"
+      class="workspace"
+      action="/generate_result"
+      method="POST"
+      enctype="multipart/form-data"
+    >
+      <div class="upload-section">
+        <div class="upload-group">
+          <label for="dataFile">1. 上傳資料表 (data.xlsx)</label>
+          <input
+            type="file"
+            id="dataFile"
+            name="dataFile"
+            accept=".xlsx"
+            required
+          />
+        </div>
+        <div class="upload-group">
+          <label for="modelFile">2. 上傳 UI 樣板 (modle.xlsm)</label>
+          <input
+            type="file"
+            id="modelFile"
+            name="modelFile"
+            accept=".xlsm"
+            required
+          />
+        </div>
       </div>
 
-      <div class="upload-group">
-        <label for="plexureModleFile">2. 請選擇模組表 (.xlsm 或 .xlsx)：</label>
-        <input type="file" id="plexureModleFile" accept=".xlsx, .xlsm" />
+      <div class="btn-group">
+        <button type="submit" id="runTransform" class="btn-submit">
+          產出最終 JSON
+        </button>
       </div>
-
-      <button id="runTransform" class="btn-submit">產出最終 JSON</button>
-      <div id="statusMsg"></div>
-    </div>
+    </form>
 
     <script>
       $(document).ready(function () {

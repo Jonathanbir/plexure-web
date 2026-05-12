@@ -275,12 +275,24 @@ def transform():
     output.seek(0)
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='data.xlsx')
 
-@app.route('/transform_to_json', methods=['POST'])
-def transform_to_json():
+@app.route('/generate_result', methods=['POST'])
+def generate_result():
     data_file = request.files['dataFile']
     model_file = request.files['modelFile']
+    
+    # 執行原本的轉換邏輯取得 JSON 字串
     json_result = perform_transformation(data_file, model_file)
-    return send_file(io.BytesIO(json_result.encode('utf-8')), mimetype='application/json', as_attachment=True, download_name='plexure.json')
+    
+    # 將 JSON 字串傳遞給新的結果頁面渲染
+    return render_template('result.html', json_content=json_result)
+
+
+# @app.route('/transform_to_json', methods=['POST'])
+# def transform_to_json():
+#     data_file = request.files['dataFile']
+#     model_file = request.files['modelFile']
+#     json_result = perform_transformation(data_file, model_file)
+#     return send_file(io.BytesIO(json_result.encode('utf-8')), mimetype='application/json', as_attachment=True, download_name='plexure.json')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
