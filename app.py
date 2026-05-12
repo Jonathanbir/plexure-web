@@ -61,6 +61,7 @@ def split_product_codes(r_text, promo_text):
     result = "|".join(codes)
     return result, result
 
+# U/V 欄位邏輯：缺失則顯示 "Nan"
 def split_time(text):
     text = str(text).strip()
     if text.upper() == "NA" or text == "" or text.lower() == "nan": 
@@ -90,11 +91,11 @@ def perform_transformation(data_stream, model_stream):
         "E75", "E77" 
     ]
     
-    template_height = 76 
+    template_height = 76 # 防止覆蓋 E77 資料格
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
-    # 1. 填寫 Excel 樣板邏輯
+    # 1. 填寫樣板 Excel
     for data_row in range(2, ws_source.max_row + 1):
         if data_row > 2:
             for r_offset in range(template_height):
@@ -116,7 +117,7 @@ def perform_transformation(data_stream, model_stream):
             elif addr == "D69":
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"
-            elif addr == "E77":
+            elif addr == "E77": 
                 ws_target.cell(row=target_r, column=3).value = "type"
                 ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
                 if not source_val or source_val.lower() == "nan":
@@ -131,7 +132,7 @@ def perform_transformation(data_stream, model_stream):
         ws_target.cell(row=footer_row, column=5).value = "id=btnSave2"
         next_row = footer_row + 1
 
-    # 2. 轉換為 JSON 邏輯
+    # 2. 轉換為 JSON 格式
     plexure_json = {
         "Name": int(datetime.datetime.now().strftime("%Y%m%d")),
         "CreationDate": 45951,
@@ -143,8 +144,6 @@ def perform_transformation(data_stream, model_stream):
 
     curr_r = 3
     inject_start_flow(plexure_json["Commands"], d2_url)
-
-    # 用來記錄當前這組優惠使用的是哪個模組
     current_template_name = ""
 
     while curr_r <= ws_target.max_row:
@@ -160,25 +159,32 @@ def perform_transformation(data_stream, model_stream):
             curr_r += 6
             continue
 
-        # --- 【核心修正點：追蹤模組名稱】 ---
-        # 檢查是否為 D20 產出的模板選擇腳本
+        # 追蹤模組名稱邏輯
         if "ExtendedDataTemplateSelector" in target and cmd == "executeScript":
             match = re.search(r"var targetText = '(.*?)';", target)
-            if match:
-                current_template_name = match.group(1)
+            if match: current_template_name = match.group(1)
 
         if cmd or target:
+            # --- 新增：針對圖片儲存按鈕的滾動與緩衝防呆 ---
+            if "Promo_en_saveButton" in target or "Promo_zh_saveButton" in target:
+                plexure_json["Commands"].append({
+                    "Command": "executeScript",
+                    "Target": "document.getElementById('" + target.replace("id=", "") + "').scrollIntoView();",
+                    "Value": ""
+                })
+                plexure_json["Commands"].append({
+                    "Command": "pause",
+                    "Target": "3000",
+                    "Value": ""
+                })
+
             new_cmd = {"Command": cmd, "Target": target}
             if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
 
-            # --- 【核心修正點：注入特殊邏輯】 ---
-            # 當遇到 DynamicFields_8__Value 且為 type 指令時
+            # 特殊模組注入邏輯
             if "ExtendedDataDynamicFields_8__Value" in target and cmd == "type":
-                # 判斷模組是否為指定的那一個
-                special_template = "MPA TW Discount Off Product(Percentage) Pre tax False"
-                if current_template_name == special_template:
-                    # 自動追加 click 9 與 type 9
+                if current_template_name == "MPA TW Discount Off Product(Percentage) Pre tax False":
                     plexure_json["Commands"].append({
                         "Command": "click",
                         "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value"
