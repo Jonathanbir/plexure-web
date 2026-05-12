@@ -4,20 +4,69 @@
     <meta charset="UTF-8" />
     <title>Plexure 自動化腳本產出結果</title>
     <style>
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f4f7f6;
+      body,
+      html {
+        height: 100%;
         margin: 0;
-        padding: 40px;
+        font-family: "Microsoft JhengHei", sans-serif;
+        background-color: #f4f4f4;
+      }
+
+      .navigation-bar {
         display: flex;
-        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        height: 64px;
+        background-color: #333333 !important;
+      }
+
+      .new-logo {
+        padding: 0 15px !important;
+        display: flex !important;
+        height: 100%;
+      }
+
+      .new-logo__image {
+        width: 100px;
+      }
+
+      .login-status {
+        display: flex;
         align-items: center;
       }
+
+      .member-icon {
+        width: 40px;
+      }
+
+      .logout-btn {
+        padding: 5px 12px;
+        font-size: 16px;
+        cursor: pointer;
+        color: #ffffff;
+        text-decoration: none;
+        transition: all 0.5s ease-in-out;
+      }
+
+      .logout-btn:hover {
+        text-decoration: underline;
+      }
+
       .container {
+        width: 100%;
+        height: 90vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .result-container {
         width: 90%;
         max-width: 1000px;
+        margin: auto;
         background: white;
-        padding: 30px;
+        padding: 20px;
         border-radius: 12px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
       }
@@ -99,19 +148,38 @@
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="header-row">
-        <h2>產出的 Plexure.json 預覽</h2>
-        <button id="copyBtn" class="btn btn-copy">複製 JSON</button>
+    <header class="pitch minWidth navigation-bar" style="padding-left: 0">
+      <a class="new-logo">
+        <img
+          class="new-logo__image"
+          src="{{ url_for('static', filename='images/logo.svg') }}"
+          alt="logo"
+        />
+      </a>
+      <div class="login-status">
+        <img
+          class="member-icon"
+          src="{{ url_for('static', filename='images/member.png') }}"
+          alt="member"
+        />
+        <a class="logout-btn" href="/logout">登出</a>
       </div>
+    </header>
+    <div class="container">
+      <div class="result-container">
+        <div class="header-row">
+          <h2>產出的 Plexure.json 預覽</h2>
+          <button id="copyBtn" class="btn btn-copy">複製 JSON</button>
+        </div>
 
-      <pre id="jsonViewer">{{ json_content }}</pre>
+        <pre id="jsonViewer">{{ json_content }}</pre>
 
-      <div class="btn-group">
-        <a href="/step2" class="btn btn-back">重新產 JSON</a>
-        <button id="downloadBtn" class="btn btn-download">
-          下載 JSON 檔案
-        </button>
+        <div class="btn-group">
+          <a href="/step2" class="btn btn-back">重新產 JSON</a>
+          <button id="downloadBtn" class="btn btn-download">
+            下載 JSON 檔案
+          </button>
+        </div>
       </div>
     </div>
 

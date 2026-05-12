@@ -12,18 +12,65 @@
         margin: 0;
         font-family: "Microsoft JhengHei", sans-serif;
         background-color: #f4f4f4;
+      }
+
+      .navigation-bar {
         display: flex;
-        justify-content: center;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        height: 64px;
+        background-color: #333333 !important;
+      }
+
+      .new-logo {
+        padding: 0 15px !important;
+        display: flex !important;
+        height: 100%;
+      }
+
+      .new-logo__image {
+        width: 100px;
+      }
+
+      .login-status {
+        display: flex;
         align-items: center;
       }
+
+      .member-icon {
+        width: 40px;
+      }
+
+      .logout-btn {
+        padding: 5px 12px;
+        font-size: 16px;
+        cursor: pointer;
+        color: #ffffff;
+        text-decoration: none;
+        transition: all 0.5s ease-in-out;
+      }
+
+      .logout-btn:hover {
+        text-decoration: underline;
+      }
+
       .workspace {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 600px;
+        height: 400px;
+        margin: auto;
         background-color: #ffffff;
         padding: 40px;
         border-radius: 12px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
         text-align: center;
-        width: 450px;
       }
+
       h2 {
         color: #ff6600;
         margin-bottom: 30px;
@@ -68,6 +115,23 @@
     </style>
   </head>
   <body>
+    <header class="pitch minWidth navigation-bar" style="padding-left: 0">
+      <a class="new-logo">
+        <img
+          class="new-logo__image"
+          src="{{ url_for('static', filename='images/logo.svg') }}"
+          alt="logo"
+        />
+      </a>
+      <div class="login-status">
+        <img
+          class="member-icon"
+          src="{{ url_for('static', filename='images/member.png') }}"
+          alt="member"
+        />
+        <a class="logout-btn" href="/logout">登出</a>
+      </div>
+    </header>
     <form
       id="jsonForm"
       class="workspace"
@@ -75,6 +139,7 @@
       method="POST"
       enctype="multipart/form-data"
     >
+      <h2>Plexure 自動化機器人 Step2</h2>
       <div class="upload-section">
         <div class="upload-group">
           <label for="dataFile">1. 上傳資料表 (data.xlsx)</label>
