@@ -105,8 +105,25 @@ def perform_transformation(data_stream, model_stream):
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"
             elif addr == "D69":
-                ws_target.cell(row=target_r, column=3).value = "executeScript"
-                target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#OfferSetup_CategoryId'); var val = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}).val(); $select.val(val).trigger('change');"
+                    ws_target.cell(row=target_r, column=3).value = "executeScript"
+                    # 移除註解以防止壓縮成一行時發生錯誤
+                    target_cell.value = f"""
+                    (function() {{
+                        var targetText = '{source_val}';
+                        var $select = window.jQuery('#OfferDetails_CategoryId');
+                        var val = $select.find('option').filter(function() {{ 
+                            return window.jQuery(this).text().trim().indexOf(targetText) > -1; 
+                        }}).val();
+                        
+                        if (val) {{
+                            $select.val(val).trigger('change').trigger('change.select2');
+                        }}
+                        
+                        window.jQuery('.select2-result-label').filter(function() {{
+                            return window.jQuery(this).text().trim().indexOf(targetText) > -1;
+                        }}).click();
+                    }})();
+                    """.replace('\n', ' ').replace('\r', '').strip()
             elif addr == "E77": # 中文條款強制改 type 並設定預設值
                 ws_target.cell(row=target_r, column=3).value = "type"
                 ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
