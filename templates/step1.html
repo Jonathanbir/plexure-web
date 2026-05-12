@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plexure 自動化機器人</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+        font-family: "Microsoft JhengHei", sans-serif;
+        background-color: #f4f4f4;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .workspace {
+        background-color: #ffffff;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        width: 400px;
+      }
+      h2 {
+        color: #ff6600;
+        margin-bottom: 30px;
+        font-size: 24px;
+      }
+      .upload-group {
+        margin-bottom: 25px;
+        text-align: left;
+      }
+      label {
+        display: block;
+        margin-bottom: 10px;
+        color: #666;
+        font-size: 14px;
+      }
+      input[type="file"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+
+      .btn-submit {
+        background-color: #ff6600;
+        color: white;
+        border: none;
+        padding: 12px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+        transition: all 0.3s;
+      }
+      .btn-submit:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      .btn-submit:hover {
+        background-color: #e65c00;
+        color: #ffffff;
+        border: 1px solid #ffffff;
+      }
+
+      /* 按鈕列容器 */
+      .btn-region {
+        display: none;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .un-save-btn {
+        background-color: #ffffff;
+        color: #ff6600;
+        border: 1px solid #ff6600;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        flex: 1;
+        font-weight: bold;
+        transition: all 0.5s ease-in-out;
+      }
+      .save-btn {
+        background-color: #ffffff;
+        color: #ff6600;
+        border: 1px solid #ff6600;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        flex: 1;
+        font-weight: bold;
+        transition: all 0.5s ease-in-out;
+      }
+      .un-save-btn:hover,
+      .save-btn:hover {
+        background-color: #e65c00;
+        color: #ffffff;
+        border: 1px solid #ffffff;
+      }
+
+      /* 下一步按鈕 */
+      .next-step-btn {
+        display: none;
+        margin-top: 20px;
+        background-color: white;
+        color: #555555;
+        border: 1px solid #555555;
+        padding: 12px;
+        font-size: 16px;
+        border-radius: 6px;
+        width: 100%;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.5s ease-in-out;
+      }
+
+      .next-step-btn:hover {
+        background-color: #cccccc;
+        color: #555555;
+        border: 1px solid white;
+      }
+
+      #statusMsg {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #888;
+      }
+
+      .logout-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        padding: 5px 12px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        background-color: #ff6600;
+        color: #ffffff;
+        text-decoration: none;
+        transition: all 0.5s ease-in-out;
+      }
+
+      .logout-btn:hover {
+        background-color: #e65c00;
+        color: #ffffff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="workspace">
+      <h2>Plexure 自動化機器人 Step1</h2>
+      <div class="upload-group">
+        <label for="imagePath">圖片路徑</label>
+        <input
+          type="text"
+          id="imagePath"
+          placeholder="請輸入圖片存放資料夾路徑"
+          style="
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+          "
+          value=""
+        />
+      </div>
+      <div class="upload-group">
+        <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
+        <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
+      </div>
+
+      <button id="runTransform" class="btn-submit">產出自動化表單</button>
+
+      <div class="btn-region">
+        <button id="unSaveBtn" class="un-save-btn">尚未存檔</button>
+        <button id="saveBtn" class="save-btn">已經存檔</button>
+      </div>
+
+      <button id="nextStepBtn" class="next-step-btn">前往下一步</button>
+
+      <div id="statusMsg"></div>
+    </div>
+    <a class="logout-btn" href="/logout">登出系統</a>
+    <script>
+      $(document).ready(function () {
+        // 1. 點擊產出
+        $("#runTransform").click(function () {
+          // 1. 取得輸入框的值並去掉前後空格
+          var file = $("#plexureFile")[0].files[0];
+          var imagePath = $("#imagePath").val().trim();
+
+          // 2. 防呆判斷：檢查圖片路徑
+          if (!imagePath) {
+            alert("請填圖片路徑");
+            $("#imagePath").focus(); // 自動幫使用者點擊輸入框
+            return;
+          }
+
+          // 3. 防呆判斷：檢查檔案
+          if (!file) {
+            alert("請先選擇原始 plexure.xlsm 檔案！");
+            return;
+          }
+
+          // 4. 通過檢查，開始執行 AJAX
+          var formData = new FormData();
+          formData.append("file", file);
+          formData.append("imagePath", imagePath);
+
+          $("#runTransform").prop("disabled", true).text("處理中...");
+          $("#statusMsg").text("正在讀取檔案並轉換路徑...");
+
+          $.ajax({
+            url: "/transform",
+            method: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhrFields: { responseType: "blob" },
+            success: function (blob) {
+              var link = document.createElement("a");
+              link.href = window.URL.createObjectURL(blob);
+              link.download = "data.xlsx";
+              link.click();
+
+              $("#runTransform").text("再次產出表單").prop("disabled", false);
+              $(".btn-region").css("display", "flex");
+              $("#statusMsg").text("請確認是否已成功下載並存檔。");
+            },
+            error: function () {
+              alert("轉換失敗");
+              $("#runTransform").prop("disabled", false).text("產出自動化表單");
+            },
+          });
+        });
+
+        // 2. 尚未存檔：重新觸發檔案選擇
+        $("#unSaveBtn").click(function () {
+          $("#plexureFile").click();
+          $("#statusMsg").text("請重新選擇檔案後再次產出。");
+        });
+
+        // 3. 已經存檔：顯示下一步
+        $("#saveBtn").click(function () {
+          $(".btn-region").hide();
+          $("#nextStepBtn").show();
+          $("#statusMsg").text("存檔確認完成，您可以進入下一步。");
+        });
+
+        // 4. 跳轉
+        $("#nextStepBtn").click(function () {
+          window.location.href = "/step2";
+        });
+      });
+    </script>
+  </body>
+</html>

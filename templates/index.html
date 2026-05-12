@@ -1,242 +1,255 @@
 <!doctype html>
-<html lang="zh-TW">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Plexure 自動化機器人</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <title>Document</title>
     <style>
-      body,
-      html {
-        height: 100%;
-        margin: 0;
-        font-family: "Microsoft JhengHei", sans-serif;
-        background-color: #f4f4f4;
+      .login-container {
         display: flex;
+        height: 100vh;
+      }
+
+      .login-container__left {
+        display: flex;
+        flex: 1;
         justify-content: center;
-        align-items: center;
+        -ms-overflow-style: none;
       }
-      .workspace {
-        background-color: #ffffff;
-        padding: 40px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        width: 400px;
+
+      .login-content {
+        margin: auto;
+        width: 350px;
       }
-      h2 {
-        color: #ff6600;
-        margin-bottom: 30px;
-        font-size: 24px;
+
+      .login-logo {
+        margin: 0 auto 40px auto;
+        width: 260px;
       }
-      .upload-group {
-        margin-bottom: 25px;
-        text-align: left;
+
+      img {
+        border: 0;
+        -ms-interpolation-mode: bicubic;
       }
-      label {
-        display: block;
-        margin-bottom: 10px;
-        color: #666;
-        font-size: 14px;
+
+      .login-body {
+        position: relative;
       }
-      input[type="file"] {
-        width: 100%;
+
+      form {
+        margin: 0;
+      }
+
+      input {
+        border: 1px solid #979797;
+        border-radius: 5px;
         padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        box-sizing: border-box;
+        margin-top: 5px;
       }
 
-      .btn-submit {
-        background-color: #ff6600;
-        color: white;
-        border: none;
-        padding: 12px;
+      .login-steps {
+        font-size: 18px;
+        height: 300px;
+      }
+
+      p {
         font-size: 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        width: 100%;
-        font-weight: bold;
-        transition: all 0.3s;
-      }
-      .btn-submit:disabled {
-        background-color: #ccc;
-        cursor: not-allowed;
+        margin-top: 0;
       }
 
-      /* 按鈕列容器 */
-      .btn-region {
-        display: none;
-        justify-content: center;
-        gap: 10px;
-        margin-top: 20px;
-      }
-      .un-save-btn {
-        background-color: #ffffff;
-        color: #ff6600;
-        border: 1px solid #ff6600;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        flex: 1;
-        font-weight: bold;
-        transition: all 0.5s ease-in-out;
-      }
-      .save-btn {
-        background-color: #ffffff;
-        color: #ff6600;
-        border: 1px solid #ff6600;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        flex: 1;
-        font-weight: bold;
-        transition: all 0.5s ease-in-out;
+      .login-message {
+        border-radius: 3px;
+        display: block;
+        padding: 12px 0 12px 0;
+        margin-bottom: 20px;
       }
 
-      .un-save-btn:hover,
-      .save-btn:hover {
-        background-color: #ff6600;
-        color: #ffffff;
-        border: 1px solid #ffffff;
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 25px;
       }
 
-      /* 下一步按鈕 */
-      .next-step-btn {
-        display: none;
-        margin-top: 20px;
-        background-color: white;
-        color: #555555;
-        border: 1px solid #555555;
-        padding: 12px;
+      label {
+        color: #979797;
+        display: block;
+      }
+
+      input {
+        border: 1px solid #979797;
+        border-radius: 5px;
+        padding: 10px;
+        margin-top: 5px;
+      }
+
+      a {
+        color: #007aff;
         font-size: 16px;
-        border-radius: 6px;
-        width: 100%;
-        font-weight: bold;
+        text-decoration: none;
+      }
+
+      .login-buttons {
+        margin-bottom: 20px;
+        margin-top: 40px;
+        text-align: right;
+      }
+
+      button,
+      html input[type="button"],
+      input[type="reset"],
+      input[type="submit"] {
+        -webkit-appearance: button;
         cursor: pointer;
-        transition: all 0.5s ease-in-out;
       }
 
-      .next-step-btn:hover {
-        background-color: #cccccc;
-        color: #555555;
-        border: 1px solid white;
+      .btn-lg {
+        font-size: 19px;
+        height: 45px;
+        font-weight: normal;
+        padding: 11px 40px;
       }
 
-      #statusMsg {
-        margin-top: 15px;
-        font-size: 14px;
-        color: #888;
+      .btn-primary {
+        background-color: #fa4616 !important;
+        color: #ffffff !important;
+        font-size: 16px;
+        font-weight: bold;
+        font-style: normal;
+        line-height: 1.2;
+        padding: 10px 15px;
+        border-radius: 5px;
+        height: 40px;
+        border: 1px solid #fa4616;
+        box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0);
+        outline: none;
+        transition: all 0.2s;
+        display: inline-block;
+        cursor: pointer;
+        font-family: Helvetica, Arial, sans-serif;
+      }
+
+      .login-container__right {
+        background: url("/static/images/plexure-lion.png");
+        background-position: center;
+        background-size: cover;
+        flex: 1;
       }
     </style>
   </head>
   <body>
-    <div class="workspace">
-      <h2>Plexure 自動化機器人 Step1</h2>
-      <div class="upload-group">
-        <label for="imagePath">圖片路徑</label>
-        <input
-          type="text"
-          id="imagePath"
-          placeholder="請輸入圖片存放資料夾路徑"
-          style="
-            width: 100%;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
-          "
-          value=""
-        />
+    <section class="login-container">
+      <div class="login-container__left">
+        <div class="login-content">
+          <div class="login-logo">
+            <img
+              src="{{ url_for('static', filename='images/plexure-logo.svg') }}"
+              alt="logo"
+            />
+          </div>
+          <div class="login-body">
+            <div class="login-loader" style="display: none"></div>
+
+            <form action="/Account/Login" id="loginForm" method="post">
+              <input
+                name="__RequestVerificationToken"
+                type="hidden"
+                value="DeI_pJnrJpYOqKpRjptEK3vaIhSvkLNzpsOPKLNiAokJyajA2lXXzzBqTt4tJkyEP4KLhJQu6d_Ov6t2a3rTtqXJ-pM1"
+              />
+              <div class="login-steps">
+                <div
+                  class="login-step"
+                  id="RequestUserPass"
+                  style="display: block"
+                >
+                  <p>Welcome.</p>
+                  <p class="login-message" id="RequestUserPass-Message">
+                    Please log in to your account.
+                  </p>
+                  <div class="form-group">
+                    <label for="UserName">Username</label>
+                    <input
+                      autofocus=""
+                      id="Username"
+                      name="Username"
+                      type="text"
+                      value=""
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="Password">Password</label>
+                    <input
+                      autocomplete="off"
+                      id="Password"
+                      name="Password"
+                      type="password"
+                      value=""
+                    />
+                  </div>
+                  <div class="login-forgotten">
+                    <a>Forgotten Password?</a>
+                  </div>
+                </div>
+              </div>
+              <div class="login-buttons">
+                <input
+                  class="btn-primary btn-lg"
+                  data-loginstate="201"
+                  id="submit-button"
+                  onclick="SubmitButtonOnClick()"
+                  type="button"
+                  value="Log in"
+                />
+              </div>
+              <p>
+                Having trouble logging in? Please contact your system
+                administrator.
+              </p>
+            </form>
+          </div>
+        </div>
       </div>
-      <div class="upload-group">
-        <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
-        <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
-      </div>
-
-      <button id="runTransform" class="btn-submit">產出自動化表單</button>
-
-      <div class="btn-region">
-        <button id="unSaveBtn" class="un-save-btn">尚未存檔</button>
-        <button id="saveBtn" class="save-btn">已經存檔</button>
-      </div>
-
-      <button id="nextStepBtn" class="next-step-btn">前往下一步</button>
-
-      <div id="statusMsg"></div>
-    </div>
-
+      <div class="login-container__right"></div>
+    </section>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-      $(document).ready(function () {
-        // 1. 點擊產出
-        $("#runTransform").click(function () {
-          // 1. 取得輸入框的值並去掉前後空格
-          var file = $("#plexureFile")[0].files[0];
-          var imagePath = $("#imagePath").val().trim();
+      function SubmitButtonOnClick() {
+        var userEl = document.getElementById("Username"); // 這裡改為 Username
+        var pwdEl = document.getElementById("Password");
 
-          // 2. 防呆判斷：檢查圖片路徑
-          if (!imagePath) {
-            alert("請填圖片路徑");
-            $("#imagePath").focus(); // 自動幫使用者點擊輸入框
-            return;
-          }
+        var user = userEl ? userEl.value.trim() : "";
+        var pwd = pwdEl ? pwdEl.value.trim() : "";
 
-          // 3. 防呆判斷：檢查檔案
-          if (!file) {
-            alert("請先選擇原始 plexure.xlsm 檔案！");
-            return;
-          }
+        console.log("嘗試登入 - 帳號:", user, "密碼:", pwd);
 
-          // 4. 通過檢查，開始執行 AJAX
-          var formData = new FormData();
-          formData.append("file", file);
-          formData.append("imagePath", imagePath);
+        if (user === "" || pwd === "") {
+          alert("請輸入帳號與密碼");
+          return;
+        }
 
-          $("#runTransform").prop("disabled", true).text("處理中...");
-          $("#statusMsg").text("正在讀取檔案並轉換路徑...");
-
-          $.ajax({
-            url: "/transform",
-            method: "POST",
-            data: formData,
-            processData: false,
-            contentType: false,
-            xhrFields: { responseType: "blob" },
-            success: function (blob) {
-              var link = document.createElement("a");
-              link.href = window.URL.createObjectURL(blob);
-              link.download = "data.xlsx";
-              link.click();
-
-              $("#runTransform").text("再次產出表單").prop("disabled", false);
-              $(".btn-region").css("display", "flex");
-              $("#statusMsg").text("請確認是否已成功下載並存檔。");
-            },
-            error: function () {
-              alert("轉換失敗");
-              $("#runTransform").prop("disabled", false).text("產出自動化表單");
-            },
+        // 執行 AJAX 登入
+        fetch("/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: user,
+            password: pwd,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.status === "success") {
+              window.location.href = "/step1";
+            } else {
+              alert(data.message);
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            alert("連線伺服器失敗");
           });
-        });
-
-        // 2. 尚未存檔：重新觸發檔案選擇
-        $("#unSaveBtn").click(function () {
-          $("#plexureFile").click();
-          $("#statusMsg").text("請重新選擇檔案後再次產出。");
-        });
-
-        // 3. 已經存檔：顯示下一步
-        $("#saveBtn").click(function () {
-          $(".btn-region").hide();
-          $("#nextStepBtn").show();
-          $("#statusMsg").text("存檔確認完成，您可以進入下一步。");
-        });
-
-        // 4. 跳轉
-        $("#nextStepBtn").click(function () {
-          window.location.href = "/step2";
-        });
-      });
+      }
     </script>
   </body>
 </html>
