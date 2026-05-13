@@ -66,7 +66,7 @@
         left: 0;
         right: 0;
         width: 600px;
-        height: 400px;
+        height: 430px;
         margin: auto;
         background-color: #ffffff;
         padding: 40px;
@@ -80,6 +80,14 @@
         margin-bottom: 30px;
         font-size: 24px;
       }
+
+      p {
+        font-size: 16px;
+        margin-top: 0;
+        text-align: left;
+        color: #888888;
+      }
+
       .upload-group {
         margin-bottom: 25px;
         text-align: left;
@@ -181,7 +189,24 @@
       #statusMsg {
         margin-top: 15px;
         font-size: 14px;
+        text-align: center;
         color: #888;
+      }
+
+      /* 錯誤邊框樣式 */
+      .input-error {
+        border: 2px solid #fa4616 !important;
+        outline: none; /* 移除藍色外框 */
+      }
+
+      /* 錯誤文字樣式 */
+      .login-witherror {
+        background-color: rgba(230, 0, 0, 0.2);
+        background-image: url("/static/images/error-icon.svg");
+        background-position: 5px;
+        background-repeat: no-repeat;
+        padding-left: 25px;
+        white-space: nowrap;
       }
     </style>
   </head>
@@ -205,6 +230,7 @@
     </header>
     <div class="workspace">
       <h2>Plexure 自動化機器人 Step1</h2>
+      <p class="login-message" id="RequestUserPass-Message"></p>
       <div class="upload-group">
         <label for="imagePath">圖片路徑</label>
         <input
@@ -239,32 +265,84 @@
     </div>
     <script>
       $(document).ready(function () {
+        const imageInput = document.getElementById("imagePath");
+        const fileInput = document.getElementById("plexureFile");
+        const file = $("#plexureFile")[0].files[0];
+        const msgEl = document.getElementById("RequestUserPass-Message");
+        const statusMsg = document.getElementById("statusMsg");
+
+        // 監聽圖片路徑輸入框的 input 事件
+        document
+          .getElementById("imagePath")
+          .addEventListener("input", function () {
+            var imageInput = this;
+            var val = imageInput.value.trim();
+
+            if (val !== "") {
+              // 當有輸入內容時，立刻移除錯誤樣式
+              imageInput.classList.remove("input-error");
+              msgEl.innerText = "";
+              msgEl.classList.remove("login-witherror");
+            } else {
+              // 當內容被刪光時，立刻顯示錯誤樣式
+              imageInput.classList.add("input-error");
+              msgEl.innerText = "請填圖片路徑";
+              msgEl.classList.add("login-witherror");
+            }
+          });
+
+        // 監聽檔案選擇框
+        document
+          .getElementById("plexureFile")
+          .addEventListener("change", function () {
+            var fileInput = this;
+
+            // 判斷是否有選取檔案 (檢查 files 陣列長度)
+            if (fileInput.files.length > 0) {
+              fileInput.classList.remove("input-error");
+              msgEl.innerText = "";
+              msgEl.classList.remove("login-witherror");
+            } else {
+              fileInput.classList.add("input-error");
+              msgEl.innerText = "請先選擇原始 plexure.xlsm 檔案！";
+              msgEl.classList.add("login-witherror");
+            }
+          });
+
         // 1. 點擊產出
         $("#runTransform").click(function () {
-          // 1. 取得輸入框的值並去掉前後空格
-          var file = $("#plexureFile")[0].files[0];
-          var imagePath = $("#imagePath").val().trim();
+          var imageInput = document.getElementById("imagePath");
+          var fileInput = document.getElementById("plexureFile");
 
-          // 2. 防呆判斷：檢查圖片路徑
-          if (!imagePath) {
-            alert("請填圖片路徑");
-            $("#imagePath").focus(); // 自動幫使用者點擊輸入框
+          var imagePath = imageInput.value.trim();
+
+          // --- 判斷 1：圖片路徑 ---
+          if (imagePath === "") {
+            imageInput.classList.add("input-error");
+            msgEl.innerText = "請填圖片路徑";
+            msgEl.classList.add("login-witherror");
+            imageInput.focus();
             return;
           }
 
-          // 3. 防呆判斷：檢查檔案
-          if (!file) {
-            alert("請先選擇原始 plexure.xlsm 檔案！");
+          // --- 判斷 2：檢查檔案 (關鍵修正) ---
+          if (fileInput.files.length === 0) {
+            fileInput.classList.add("input-error");
+            msgEl.innerText = "請先選擇原始 plexure.xlsm 檔案！";
+            msgEl.classList.add("login-witherror");
+            // 檔案輸入框無法用 focus() 強制開啟，提示使用者即可
             return;
           }
 
-          // 4. 通過檢查，開始執行 AJAX
+          // --- 通過防呆，開始準備上傳 ---
           var formData = new FormData();
-          formData.append("file", file);
+          formData.append("file", fileInput.files[0]); // 抓取第一個檔案
           formData.append("imagePath", imagePath);
 
+          // 顯示處理中狀態
           $("#runTransform").prop("disabled", true).text("處理中...");
-          $("#statusMsg").text("正在讀取檔案並轉換路徑...");
+          statusMsg.innerText = "正在讀取檔案並轉換路徑...";
+          msgEl.classList.remove("login-witherror");
 
           $.ajax({
             url: "/transform",
@@ -274,6 +352,7 @@
             contentType: false,
             xhrFields: { responseType: "blob" },
             success: function (blob) {
+              // 下載檔案邏輯...
               var link = document.createElement("a");
               link.href = window.URL.createObjectURL(blob);
               link.download = "data.xlsx";
@@ -281,10 +360,21 @@
 
               $("#runTransform").text("再次產出表單").prop("disabled", false);
               $(".btn-region").css("display", "flex");
-              $("#statusMsg").text("請確認是否已成功下載並存檔。");
+              statusMsg.innerText = "成功下載！請確認檔案。";
             },
-            error: function () {
-              alert("轉換失敗");
+            error: function (xhr) {
+              // 處理後端傳回的錯誤
+              var errorMsg = "轉換失敗";
+              try {
+                // 如果後端有傳 JSON 錯誤訊息
+                var reader = new FileReader();
+                reader.onload = function () {
+                  alert("錯誤：" + JSON.parse(reader.result).message);
+                };
+                reader.readAsText(xhr.responseJSON);
+              } catch (e) {
+                alert(errorMsg);
+              }
               $("#runTransform").prop("disabled", false).text("產出自動化表單");
             },
           });
