@@ -185,6 +185,12 @@ def perform_transformation(data_stream, model_stream):
 # ==========================================
 
 @app.route('/')
+def index():
+    # 如果有登入，標籤會引導你來這裡，然後被這行踢去 /step1
+    if session.get('logged_in'): 
+        return redirect(url_for('step1'))
+    return render_template('index.html')
+
 def login_page():
     if session.get('logged_in'): return redirect(url_for('step1'))
     return render_template('index.html')
@@ -282,7 +288,7 @@ def generate_result():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login_page'))
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

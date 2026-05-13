@@ -139,6 +139,22 @@
         background-size: cover;
         flex: 1;
       }
+
+      /* 錯誤邊框樣式 */
+      .input-error {
+        border: 2px solid #fa4616 !important;
+        outline: none; /* 移除藍色外框 */
+      }
+
+      /* 錯誤文字樣式 */
+      .login-witherror {
+        background-color: rgba(230, 0, 0, 0.2);
+        background-image: url("/static/images/error-icon.svg");
+        background-position: 5px;
+        background-repeat: no-repeat;
+        padding-left: 25px;
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
@@ -217,21 +233,35 @@
     </section>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+      // 1. 原本的登入邏輯函式
       function SubmitButtonOnClick() {
-        var userEl = document.getElementById("Username"); // 這裡改為 Username
-        var pwdEl = document.getElementById("Password");
+        const userEl = document.getElementById("Username");
+        const pwdEl = document.getElementById("Password");
+        const msgEl = document.getElementById("RequestUserPass-Message");
 
-        var user = userEl ? userEl.value.trim() : "";
-        var pwd = pwdEl ? pwdEl.value.trim() : "";
+        // --- 重置狀態：每次點擊前先恢復成原始樣式 ---
+        userEl.classList.remove("input-error");
+        pwdEl.classList.remove("input-error");
+        msgEl.classList.remove("login-witherror");
+        msgEl.innerText = "Please log in to your account.";
 
-        console.log("嘗試登入 - 帳號:", user, "密碼:", pwd);
+        const user = userEl.value.trim();
+        const pwd = pwdEl.value.trim();
 
+        // --- 第一關：檢查是否為空值 ---
         if (user === "" || pwd === "") {
-          alert("請輸入帳號與密碼");
+          // 變更提示文字與顏色
+          msgEl.innerText = "Username and password are required fields";
+          msgEl.classList.add("login-witherror");
+
+          // 針對空白的欄位加上紅框
+          if (user === "") userEl.classList.add("input-error");
+          if (pwd === "") pwdEl.classList.add("input-error");
+
           return;
         }
 
-        // 執行 AJAX 登入
+        // --- 第二關：執行 AJAX 登入 ---
         fetch("/login", {
           method: "POST",
           headers: {
@@ -247,7 +277,13 @@
             if (data.status === "success") {
               window.location.href = "/step1";
             } else {
-              alert(data.message);
+              // --- 登入失敗：後端回傳帳密錯誤 ---
+              msgEl.innerText = data.message; // 顯示後端傳來的「帳號或密碼錯誤」
+              msgEl.classList.add("login-witherror");
+
+              // 通常帳密錯會同時讓兩個欄位都變紅框
+              userEl.classList.add("input-error");
+              pwdEl.classList.add("input-error");
             }
           })
           .catch((error) => {
@@ -255,6 +291,18 @@
             alert("連線伺服器失敗");
           });
       }
+
+      // 2. 新增：監聽鍵盤 Enter 事件
+      // 我們監聽整個文件的按鍵，只要焦點在輸入框內按下 Enter 就觸發
+      document.addEventListener("keydown", function (event) {
+        // 檢查按下的按鍵是否為 Enter (代碼 13 或 key 為 "Enter")
+        if (event.key === "Enter" || event.keyCode === 13) {
+          // 防止某些瀏覽器的預設行為（例如表單重複提交）
+          event.preventDefault();
+          // 執行登入函式
+          SubmitButtonOnClick();
+        }
+      });
     </script>
   </body>
 </html>
