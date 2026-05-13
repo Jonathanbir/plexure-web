@@ -144,6 +144,40 @@
         padding-left: 25px;
         white-space: nowrap;
       }
+
+      /* 旋轉動畫與進度容器 */
+      .loading-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* 圓圈旋轉效果 */
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff; /* 頂部顏色設為白色，形成旋轉線條 */
+        animation: spin 1s linear infinite;
+        margin-left: 8px;
+      }
+
+      /* 順時鐘旋轉動畫 */
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* 讓按鈕在處理中稍微變暗 */
+      .btn-submit:disabled {
+        background-color: #ff9966;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -246,18 +280,15 @@
           }
         });
 
-        // --- B. 按鈕點擊：最終防呆檢查 ---
         $("#runTransform").click(function (e) {
-          // 【保險 1】阻止瀏覽器任何預設的提交行為
           e.preventDefault();
-          let hasError = false;
 
           // 重置樣式
           dataFileInput.classList.remove("input-error");
           modelFileInput.classList.remove("input-error");
           msgEl.classList.remove("login-witherror");
 
-          // 檢查 data.xlsx
+          // 1. 檢查檔案是否存在
           if (dataFileInput.files.length === 0) {
             dataFileInput.classList.add("input-error");
             msgEl.innerText = "請上傳資料表";
@@ -275,13 +306,64 @@
             return;
           }
 
-          // 通過檢查：改變按鈕狀態並手動提交表單
-          $(this).prop("disabled", true).text("處理中...");
-          statusMsg.innerText = "正在產出 JSON，請稍候...";
-          msgEl.classList.remove("login-witherror");
+          // 2. 準備上傳資料
+          var formData = new FormData(document.getElementById("jsonForm"));
+          var btn = $(this);
 
-          // 手動提交表單
-          form.submit();
+          btn.prop("disabled", true);
+          let percent = 0;
+
+          // 定義更新按鈕 UI 的函式
+          function updateBtnUI(p) {
+            btn.html(`
+      <div class="loading-content">
+        <span>${p}%</span>
+        <div class="spinner"></div>
+      </div>
+    `);
+          }
+
+          // 啟動定時器，每 200 毫秒增加一點進度
+          let progressTimer = setInterval(function () {
+            // 越接近 95% 增加越慢
+            if (percent < 90) {
+              percent += Math.floor(Math.random() * 5) + 2; // 隨機增加 2~7%
+            } else if (percent < 98) {
+              percent += 1; // 慢慢爬
+            }
+
+            if (percent > 98) percent = 98; // 卡在 98% 等待後端回傳
+            updateBtnUI(percent);
+          }, 200);
+
+          // 3. 開始執行 AJAX
+          $.ajax({
+            url: "/generate_result",
+            type: "POST",
+            data: formData,
+            contentType: false,
+            processData: false,
+            beforeSend: function () {
+              btn.prop("disabled", true);
+              msgEl.innerText = "正在傳送檔案並計算 JSON...";
+            },
+            success: function (response) {
+              // 結束定時器並衝到 100%
+              clearInterval(progressTimer);
+              updateBtnUI(100);
+
+              setTimeout(function () {
+                document.open();
+                document.write(response);
+                document.close();
+              }, 300); // 稍微停 0.3 秒讓使用者看到 100%
+            },
+            error: function () {
+              alert("轉換失敗，請檢查檔案內容或格式是否正確。");
+              btn.prop("disabled", false).text("產出最終 JSON");
+              msgEl.innerText = "";
+            },
+          });
         });
       });
     </script>
