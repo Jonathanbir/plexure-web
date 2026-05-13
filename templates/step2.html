@@ -18,6 +18,13 @@
         background-color: #f4f4f4;
       }
 
+      p {
+        font-size: 16px;
+        margin-top: 0;
+        text-align: left;
+        color: #888888;
+      }
+
       .navigation-bar {
         display: flex;
         justify-content: space-between;
@@ -79,10 +86,12 @@
         color: #ff6600;
         margin-bottom: 30px;
       }
+
       .upload-group {
         margin-bottom: 20px;
         text-align: left;
       }
+
       label {
         display: block;
         margin-bottom: 8px;
@@ -90,6 +99,7 @@
         font-size: 14px;
         font-weight: bold;
       }
+
       input[type="file"] {
         width: 100%;
         padding: 8px;
@@ -97,6 +107,7 @@
         border-radius: 4px;
         box-sizing: border-box;
       }
+
       .btn-submit {
         background-color: #ff6600;
         color: white;
@@ -108,13 +119,30 @@
         width: 100%;
         font-weight: bold;
       }
+
       .btn-submit:hover {
         background-color: #e65c00;
       }
+
       #statusMsg {
         margin-top: 15px;
         font-size: 14px;
+        text-align: center;
         color: #888;
+      }
+
+      .input-error {
+        border: 2px solid #fa4616 !important;
+        outline: none; /* 移除藍色外框 */
+      }
+
+      .login-witherror {
+        background-color: rgba(230, 0, 0, 0.2);
+        background-image: url("/static/images/error-icon.svg");
+        background-position: 5px;
+        background-repeat: no-repeat;
+        padding-left: 25px;
+        white-space: nowrap;
       }
     </style>
   </head>
@@ -144,82 +172,116 @@
       enctype="multipart/form-data"
     >
       <h2>Plexure 自動化機器人 Step2</h2>
+      <p class="login-message" id="RequestUserPass-Message"></p>
       <div class="upload-section">
         <div class="upload-group">
           <label for="dataFile">1. 上傳資料表 (data.xlsx)</label>
-          <input
-            type="file"
-            id="dataFile"
-            name="dataFile"
-            accept=".xlsx"
-            required
-          />
+          <input type="file" id="dataFile" name="dataFile" accept=".xlsx" />
         </div>
         <div class="upload-group">
-          <label for="modelFile">2. 上傳 UI 樣板 (modle.xlsm)</label>
-          <input
-            type="file"
-            id="modelFile"
-            name="modelFile"
-            accept=".xlsm"
-            required
-          />
+          <label for="modelFile">2. 上傳 modle 樣板 (modle.xlsm)</label>
+          <input type="file" id="modelFile" name="modelFile" accept=".xlsm" />
         </div>
       </div>
-
       <div class="btn-group">
-        <button type="submit" id="runTransform" class="btn-submit">
+        <button type="button" id="runTransform" class="btn-submit">
           產出最終 JSON
         </button>
       </div>
+      <p id="statusMsg" class="login-message"></p>
     </form>
 
     <script>
       $(document).ready(function () {
-        $("#runTransform").click(function () {
-          var dataFile = $("#plexureDataFile")[0].files[0];
-          var modelFile = $("#plexureModleFile")[0].files[0];
+        const dataFileInput = document.getElementById("dataFile");
+        const modelFileInput = document.getElementById("modelFile");
+        const msgEl = document.getElementById("RequestUserPass-Message");
+        const statusMsg = document.getElementById("statusMsg");
+        const form = document.getElementById("jsonForm");
 
-          if (!dataFile || !modelFile) {
-            alert("請確保兩個檔案都已選擇！");
+        // --- A. 即時監聽：選了檔案就移除紅框 ---
+        // [dataFileInput, modelFileInput].forEach((el) => {
+        //   el.addEventListener("change", function () {
+        //     if (this.files.length > 0) {
+        //       this.classList.remove("input-error");
+        //       // 如果兩個都選了，就清空錯誤文字
+        //       if (
+        //         dataFileInput.files.length > 0 &&
+        //         modelFileInput.files.length > 0
+        //       ) {
+        //         msgEl.innerText = "";
+        //         msgEl.classList.remove("login-witherror");
+        //       }
+        //     }
+        //   });
+        // });
+
+        dataFileInput.addEventListener("change", function () {
+          var fileInput = this;
+
+          // 判斷是否有選取檔案 (檢查 files 陣列長度)
+          if (fileInput.files.length > 0) {
+            fileInput.classList.remove("input-error");
+            msgEl.innerText = "";
+            msgEl.classList.remove("login-witherror");
+          } else {
+            fileInput.classList.add("input-error");
+            msgEl.innerText = "請先上傳資料表";
+            msgEl.classList.add("login-witherror");
+          }
+        });
+
+        modelFileInput.addEventListener("change", function () {
+          var fileInput = this;
+
+          // 判斷是否有選取檔案 (檢查 files 陣列長度)
+          if (fileInput.files.length > 0) {
+            fileInput.classList.remove("input-error");
+            msgEl.innerText = "";
+            msgEl.classList.remove("login-witherror");
+          } else {
+            fileInput.classList.add("input-error");
+            msgEl.innerText = "請先上傳modle樣板";
+            msgEl.classList.add("login-witherror");
+          }
+        });
+
+        // --- B. 按鈕點擊：最終防呆檢查 ---
+        $("#runTransform").click(function (e) {
+          // 【保險 1】阻止瀏覽器任何預設的提交行為
+          e.preventDefault();
+          let hasError = false;
+
+          // 重置樣式
+          dataFileInput.classList.remove("input-error");
+          modelFileInput.classList.remove("input-error");
+          msgEl.classList.remove("login-witherror");
+
+          // 檢查 data.xlsx
+          if (dataFileInput.files.length === 0) {
+            dataFileInput.classList.add("input-error");
+            msgEl.innerText = "請上傳資料表";
+            msgEl.classList.add("login-witherror");
+            // 檔案輸入框無法用 focus() 強制開啟，提示使用者即可
             return;
           }
 
-          var formData = new FormData();
-          formData.append("dataFile", dataFile);
-          formData.append("modelFile", modelFile);
+          // 檢查 modle.xlsm
+          if (modelFileInput.files.length === 0) {
+            modelFileInput.classList.add("input-error");
+            msgEl.innerText = "請上傳modle樣板";
+            msgEl.classList.add("login-witherror");
+            // 檔案輸入框無法用 focus() 強制開啟，提示使用者即可
+            return;
+          }
 
-          // 1. 狀態更新
-          $("#runTransform").prop("disabled", true).text("處理中...");
-          $("#statusMsg").text("正在處理資料並產出 JSON...");
+          // 通過檢查：改變按鈕狀態並手動提交表單
+          $(this).prop("disabled", true).text("處理中...");
+          statusMsg.innerText = "正在產出 JSON，請稍候...";
+          msgEl.classList.remove("login-witherror");
 
-          // 2. 使用 fetch 取代 $.ajax 避免 200 解析錯誤
-          fetch("/transform_to_json", {
-            method: "POST",
-            body: formData,
-          })
-            .then((response) => {
-              if (!response.ok)
-                throw new Error("網路回應不正確，代碼：" + response.status);
-              return response.blob();
-            })
-            .then((blob) => {
-              // 3. 下載動作
-              var link = document.createElement("a");
-              link.href = window.URL.createObjectURL(blob);
-              link.download = "plexure.json";
-              link.click();
-
-              // 4. 成功後恢復按鈕
-              $("#statusMsg").text("轉換成功！JSON 已下載。");
-              $("#runTransform").prop("disabled", false).text("產出最終 JSON");
-            })
-            .catch((error) => {
-              console.error("Error:", error);
-              alert("轉換失敗！原因：" + error.message);
-              $("#statusMsg").text("發生錯誤，請檢查後端日誌。");
-              $("#runTransform").prop("disabled", false).text("產出最終 JSON");
-            });
+          // 手動提交表單
+          form.submit();
         });
       });
     </script>

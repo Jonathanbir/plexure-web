@@ -275,15 +275,28 @@ def transform():
 
 @app.route('/generate_result', methods=['POST'])
 def generate_result():
-    if not session.get('logged_in'): return redirect(url_for('login_page'))
+    if not session.get('logged_in'):
+        return redirect(url_for('index'))
+    
     try:
-        data_file = request.files['dataFile']
-        model_file = request.files['modelFile']
+        data_file = request.files.get('dataFile')
+        model_file = request.files.get('modelFile')
+
+        # --- 新增後端防禦檢查 ---
+        if not data_file or data_file.filename == '':
+            return "錯誤：未上傳資料表 (data.xlsx)", 400
+        if not model_file or model_file.filename == '':
+            return "錯誤：未上傳 UI 樣板 (modle.xlsm)", 400
+
+        # 執行轉換
         json_result = perform_transformation(data_file, model_file)
+        
         return render_template('result.html', json_content=json_result)
+        
     except Exception as e:
         traceback.print_exc()
-        return f"發生錯誤：{str(e)}", 500
+        # 這裡會捕捉到 Zip 相關錯誤，並顯示比較友善的訊息
+        return f"發生錯誤：{str(e)}。請確認上傳的是正確的 Excel 檔案格式。", 500
 
 @app.route('/logout')
 def logout():
