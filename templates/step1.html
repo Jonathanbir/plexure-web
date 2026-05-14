@@ -59,15 +59,16 @@
         text-decoration: underline;
       }
 
+      .workspace-container {
+        width: 100%;
+        height: calc(100vh - 64px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       .workspace {
-        position: fixed;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
         width: 600px;
-        height: 430px;
-        margin: auto;
         background-color: #ffffff;
         padding: 40px;
         border-radius: 12px;
@@ -228,40 +229,42 @@
         <a class="logout-btn" href="/logout">登出</a>
       </div>
     </header>
-    <div class="workspace">
-      <h2>Plexure 自動化機器人 Step1</h2>
-      <p class="login-message" id="RequestUserPass-Message"></p>
-      <div class="upload-group">
-        <label for="imagePath">圖片路徑</label>
-        <input
-          type="text"
-          id="imagePath"
-          placeholder="請輸入圖片存放資料夾路徑"
-          style="
-            width: 100%;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
-          "
-          value=""
-        />
+    <div class="workspace-container">
+      <div class="workspace">
+        <h2>Plexure 自動化機器人 Step1</h2>
+        <p class="login-message" id="RequestUserPass-Message"></p>
+        <div class="upload-group">
+          <label for="imagePath">圖片路徑</label>
+          <input
+            type="text"
+            id="imagePath"
+            placeholder="請輸入圖片存放資料夾路徑"
+            style="
+              width: 100%;
+              padding: 10px;
+              border-radius: 6px;
+              border: 1px solid #ddd;
+              box-sizing: border-box;
+            "
+            value=""
+          />
+        </div>
+        <div class="upload-group">
+          <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
+          <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
+        </div>
+
+        <button id="runTransform" class="btn-submit">產出自動化表單</button>
+
+        <div class="btn-region">
+          <button id="unSaveBtn" class="un-save-btn">尚未存檔</button>
+          <button id="saveBtn" class="save-btn">已經存檔</button>
+        </div>
+
+        <button id="nextStepBtn" class="next-step-btn">前往下一步</button>
+
+        <div id="statusMsg"></div>
       </div>
-      <div class="upload-group">
-        <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
-        <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
-      </div>
-
-      <button id="runTransform" class="btn-submit">產出自動化表單</button>
-
-      <div class="btn-region">
-        <button id="unSaveBtn" class="un-save-btn">尚未存檔</button>
-        <button id="saveBtn" class="save-btn">已經存檔</button>
-      </div>
-
-      <button id="nextStepBtn" class="next-step-btn">前往下一步</button>
-
-      <div id="statusMsg"></div>
     </div>
     <script>
       $(document).ready(function () {

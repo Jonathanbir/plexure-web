@@ -66,15 +66,16 @@
         text-decoration: underline;
       }
 
+      .workspace-container {
+        width: 100%;
+        height: calc(100vh - 64px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       .workspace {
-        position: fixed;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
         width: 600px;
-        height: 400px;
-        margin: auto;
         background-color: #ffffff;
         padding: 40px;
         border-radius: 12px;
@@ -194,33 +195,34 @@
         <a class="logout-btn" href="/logout">登出</a>
       </div>
     </header>
-    <form
-      id="jsonForm"
-      class="workspace"
-      action="/generate_result"
-      method="POST"
-      enctype="multipart/form-data"
-    >
-      <h2>Plexure 自動化機器人 Step2</h2>
-      <p class="login-message" id="RequestUserPass-Message"></p>
-      <div class="upload-section">
-        <div class="upload-group">
-          <label for="dataFile">1. 上傳資料表 (data.xlsx)</label>
-          <input type="file" id="dataFile" name="dataFile" accept=".xlsx" />
+    <div class="workspace-container">
+      <form
+        id="jsonForm"
+        class="workspace"
+        action="/generate_result"
+        method="POST"
+        enctype="multipart/form-data"
+      >
+        <h2>Plexure 自動化機器人 Step2</h2>
+        <p class="login-message" id="RequestUserPass-Message"></p>
+        <div class="upload-section">
+          <div class="upload-group">
+            <label for="dataFile">1. 上傳資料表 (data.xlsx)</label>
+            <input type="file" id="dataFile" name="dataFile" accept=".xlsx" />
+          </div>
+          <div class="upload-group">
+            <label for="modelFile">2. 上傳 modle 樣板 (modle.xlsm)</label>
+            <input type="file" id="modelFile" name="modelFile" accept=".xlsm" />
+          </div>
         </div>
-        <div class="upload-group">
-          <label for="modelFile">2. 上傳 modle 樣板 (modle.xlsm)</label>
-          <input type="file" id="modelFile" name="modelFile" accept=".xlsm" />
+        <div class="btn-group">
+          <button type="button" id="runTransform" class="btn-submit">
+            產出最終 JSON
+          </button>
         </div>
-      </div>
-      <div class="btn-group">
-        <button type="button" id="runTransform" class="btn-submit">
-          產出最終 JSON
-        </button>
-      </div>
-      <p id="statusMsg" class="login-message"></p>
-    </form>
-
+        <p id="statusMsg" class="login-message"></p>
+      </form>
+    </div>
     <script>
       $(document).ready(function () {
         const dataFileInput = document.getElementById("dataFile");
