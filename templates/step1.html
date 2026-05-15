@@ -250,15 +250,7 @@
           <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
         </div>
 
-        <button id="runTransform" class="btn-submit">產出自動化表單</button>
-
-        <div class="btn-region">
-          <button id="unSaveBtn" class="un-save-btn">尚未存檔</button>
-          <button id="saveBtn" class="save-btn">已經存檔</button>
-        </div>
-
-        <button id="nextStepBtn" class="next-step-btn">前往下一步</button>
-
+        <button id="runTransform" class="btn-submit">下一步</button>
         <div id="statusMsg"></div>
       </div>
     </div>
@@ -338,6 +330,7 @@
           formData.append("file", fileInput.files[0]); // 抓取第一個檔案
           formData.append("imagePath", imagePath);
 
+          var btn = $(this);
           // 顯示處理中狀態
           $("#runTransform").prop("disabled", true).text("處理中...");
           statusMsg.innerText = "正在讀取檔案並轉換路徑...";
@@ -349,52 +342,22 @@
             data: formData,
             processData: false,
             contentType: false,
-            xhrFields: { responseType: "blob" },
-            success: function (blob) {
-              // 下載檔案邏輯...
-              var link = document.createElement("a");
-              link.href = window.URL.createObjectURL(blob);
-              link.download = "data.xlsx";
-              link.click();
-
-              $("#runTransform").text("再次產出表單").prop("disabled", false);
-              $(".btn-region").css("display", "flex");
-              statusMsg.innerText = "成功下載！請確認檔案。";
+            success: function (res) {
+              if (res.status === "success") {
+                msgEl.innerText = "轉換成功，正在前往下一步...";
+                setTimeout(() => (window.location.href = "/step2"), 1000);
+              } else {
+                alert("失敗: " + res.message);
+                $("#runTransform")
+                  .prop("disabled", false)
+                  .text("產出自動化表單");
+              }
             },
             error: function (xhr) {
-              // 處理後端傳回的錯誤
-              var errorMsg = "轉換失敗";
-              try {
-                // 如果後端有傳 JSON 錯誤訊息
-                var reader = new FileReader();
-                reader.onload = function () {
-                  alert("錯誤：" + JSON.parse(reader.result).message);
-                };
-                reader.readAsText(xhr.responseJSON);
-              } catch (e) {
-                alert(errorMsg);
-              }
-              $("#runTransform").prop("disabled", false).text("產出自動化表單");
+              alert("伺服器錯誤，請檢查後台 Log");
+              btn.prop("disabled", false).text("產出自動化表單");
             },
           });
-        });
-
-        // 2. 尚未存檔：重新觸發檔案選擇
-        $("#unSaveBtn").click(function () {
-          $("#plexureFile").click();
-          $("#statusMsg").text("請重新選擇檔案後再次產出。");
-        });
-
-        // 3. 已經存檔：顯示下一步
-        $("#saveBtn").click(function () {
-          $(".btn-region").hide();
-          $("#nextStepBtn").show();
-          $("#statusMsg").text("存檔確認完成，您可以進入下一步。");
-        });
-
-        // 4. 跳轉
-        $("#nextStepBtn").click(function () {
-          window.location.href = "/step2";
         });
       });
     </script>

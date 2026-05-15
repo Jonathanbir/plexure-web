@@ -5,223 +5,165 @@ import json
 import datetime
 import re
 import io
+import os
 import traceback
 
 app = Flask(__name__)
-app.secret_key = "plexure_automation_master_key" # 用於保持登入狀態
+app.secret_key = "plexure_automation_master_key"
+
+# 建立 excel 資料夾存放路徑
+EXCEL_DIR = os.path.join(os.path.dirname(__file__), 'excel')
+if not os.path.exists(EXCEL_DIR):
+    os.makedirs(EXCEL_DIR)
 
 # ==========================================
-# Step 1: 輔助函數 (邏輯處理)
+# 輔助函數 (邏輯處理)
 # ==========================================
 
 def extract_main_numbers(text):
     text = str(text)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
     matches = re.findall(r"(?m)^\s*(\d+)", text)
     return matches
 
 def is_buy1get1(text):
     if not text: return False
-    text = str(text)
-    return "買一送一" in text or bool(re.search(r"買\s*[\d一二三四五六七八九十]+\s*送\s*[\d一二三四五六七八九十]+", text))
+    return "買一送一" in str(text) or bool(re.search(r"買\s*[\d一-十]+\s*送\s*[\d一-十]+", str(text)))
 
 def clean_empty_text(val):
     if pd.isna(val): return ""
-    val_str = str(val).strip()
-    if val_str.lower() in ["", "nan", "none", "00:00:00", "0", "0.0"]: return ""
-    return val_str
+    v = str(val).strip()
+    return "" if v.lower() in ["", "nan", "none", "00:00:00", "0", "0.0"] else v
 
 def split_product_codes(r_text, promo_text):
     codes = extract_main_numbers(r_text)
     if not codes: return "", ""
-    promo_str = str(promo_text)
-    if is_buy1get1(promo_str):
-        result = "|".join(codes)
-        return result, result
-    return "|".join(codes), (codes[-1] if len(codes) > 0 else "")
+    if is_buy1get1(promo_text):
+        res = "|".join(codes)
+        return res, res
+    return "|".join(codes), (codes[-1] if codes else "")
 
 def split_time(text):
     text = str(text).strip()
-    if text.upper() == "NA" or text == "" or text.lower() == "nan": return "Nan", "Nan"
+    if text.upper() == "NA" or not text or text.lower() == "nan": return "Nan", "Nan"
     if "-" in text:
         parts = text.split("-")
-        s = parts[0].strip()
-        e = parts[1].strip() if len(parts) > 1 else "Nan"
-        return (s if s else "Nan"), (e if e else "Nan")
+        return parts[0].strip(), (parts[1].strip() if len(parts) > 1 else "Nan")
     return text, "Nan"
 
 def get_extended_template(text):
     if pd.isna(text): return ""
-    text = str(text)
-    if re.search(r"\+.*(?:特價|限時優惠)", text):
-        return "TW Price Deal - Two Product Sets - Reduced Price"
-    if re.search(r"滿.*(?:送|折)|單點.*折", text):
-        return "MPA TW Discount Off Product(Percentage) Pre tax False"
-    if re.search(r"買一送一|買.*送|單點.*送", text):
-        return "TW Buy One Get One Or Another Discounted(Percentage)"
-    if re.search(r"現折|單點.*特價", text):
-        return "MPA TW Discount Off Product($Amount) Pre tax False"
+    t = str(text)
+    if re.search(r"\+.*(?:特價|限時優惠)", t): return "TW Price Deal - Two Product Sets - Reduced Price"
+    if re.search(r"滿.*(?:送|折)|單點.*折", t): return "MPA TW Discount Off Product(Percentage) Pre tax False"
+    if re.search(r"買一送一|買.*送|單點.*送", t): return "TW Buy One Get One Or Another Discounted(Percentage)"
+    if re.search(r"現折|單點.*特價", t): return "MPA TW Discount Off Product($Amount) Pre tax False"
     return ""
 
 # ==========================================
-# Step 2: 核心轉換函式 (JSON 產出邏輯)
+# 核心轉換邏輯 (JSON 產出)
 # ==========================================
 
-def perform_transformation(data_stream, model_stream):
-    wb_source = openpyxl.load_workbook(data_stream, data_only=True)
+def perform_transformation(data_path, model_path):
+    # 此處接收的是檔案路徑
+    wb_source = openpyxl.load_workbook(data_path, data_only=True)
     ws_source = wb_source.worksheets[0]
-    wb_target = openpyxl.load_workbook(model_stream)
+    wb_target = openpyxl.load_workbook(model_path)
     ws_target = wb_target.worksheets[0]
 
-    # 固定填寫的 Excel 地址對應
-    target_cells_addr = [
-        "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36",
-        "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62",
-        "E64", "E66", "D69", "E71", "E73", "E75", "E77"
-    ]
-    
-    template_height = 76 
+    target_cells_addr = ["E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62", "E64", "E66", "D69", "E71", "E73", "E75", "E77"]
+    template_height = 77
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
     for data_row in range(2, ws_source.max_row + 1):
         if data_row > 2:
-            # 複製基礎樣板內容
-            for r_offset in range(template_height):
+            for r in range(template_height):
                 for c in range(1, ws_target.max_column + 1):
-                    ws_target.cell(row=next_row + r_offset, column=c).value = \
-                        ws_target.cell(row=3 + r_offset, column=c).value
+                    ws_target.cell(row=next_row + r, column=c).value = ws_target.cell(row=3 + r, column=c).value
 
-        # 1. 填寫固定欄位
         for i, addr in enumerate(target_cells_addr):
-            source_col = i + 1
-            source_val = str(ws_source.cell(row=data_row, column=source_col).value or "").strip()
-            orig_cell = wb_target.worksheets[0][addr]
-            target_r = orig_cell.row + (next_row - 3)
-            target_cell = ws_target.cell(row=target_r, column=orig_cell.column)
-            target_cell.number_format = "@"
+            source_val = str(ws_source.cell(row=data_row, column=i+1).value or "").strip()
+            orig = wb_target.worksheets[0][addr]
+            tr, tc = orig.row + (next_row - 3), orig.column
+            t_cell = ws_target.cell(row=tr, column=tc)
+            t_cell.number_format = "@"
 
-            if addr == "D20": # 樣板選擇
-                ws_target.cell(row=target_r, column=3).value = "executeScript"
-                target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"
-            elif addr == "D69": # 類別選擇 (修正 Select2)
-                ws_target.cell(row=target_r, column=3).value = "executeScript"
-                safe_val = source_val.replace("'", "\\'")
-                target_cell.value = f"(function(){{var t='{safe_val}';var s=window.jQuery('#OfferDetails_CategoryId');var v=s.find('option').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).val();if(v){{s.val(v).trigger('change').trigger('change.select2');}}window.jQuery('.select2-result-label').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).click();}})();"
-            elif addr == "E77": # 條款處理
-                ws_target.cell(row=target_r, column=3).value = "type"
-                ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
-                if not source_val or source_val.lower() == "nan":
-                    source_val = ""
-                target_cell.value = source_val
+            if addr == "D20":
+                ws_target.cell(row=tr, column=3).value = "executeScript"
+                t_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"
+            elif addr == "D69":
+                ws_target.cell(row=tr, column=3).value = "executeScript"
+                t_cell.value = f"(function(){{var t='{source_val.replace("'", "\\'")}';var s=window.jQuery('#OfferDetails_CategoryId');var v=s.find('option').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).val();if(v){{s.val(v).trigger('change').trigger('change.select2');}}window.jQuery('.select2-result-label').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).click();}})();"
+            elif addr == "E77":
+                ws_target.cell(row=tr, column=3).value = "type"
+                ws_target.cell(row=tr, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
+                t_cell.value = source_val if source_val else "每券限兌換一次。每筆交易可以同時使用多張不同品項之回饋券或優惠券。"
             else:
-                target_cell.value = source_val
+                t_cell.value = source_val
 
-        # 2. 動態追加內容 (Tags & Stores)
-        dynamic_row = next_row + template_height
+        # 動態追加 Tags 與 Stores
+        dyn_r = next_row + template_height
+        for i, col in enumerate([28, 29, 30]):
+            txt = str(ws_source.cell(row=data_row, column=col).value or "").strip()
+            if txt:
+                for tag in [t.strip() for t in txt.split(",") if t.strip()]:
+                    ws_target.cell(row=dyn_r, column=3).value = "addSelection"
+                    ws_target.cell(row=dyn_r, column=4).value = f"id=allTags{i+1}"
+                    ws_target.cell(row=dyn_r, column=5).value = f"label={tag}"
+                    dyn_r += 1
+                ws_target.cell(row=dyn_r, column=3).value = "click"
+                ws_target.cell(row=dyn_r, column=4).value = f"id=btnAdd{i+1}"
+                dyn_r += 1
 
-        # 處理 Tags (AB, AC, AD 欄)
-        selection_cols = [28, 29, 30] 
-        for i, col_idx in enumerate(selection_cols):
-            cell_text = str(ws_source.cell(row=data_row, column=col_idx).value or "").strip()
-            if cell_text:
-                tag_list = [t.strip() for t in cell_text.split(",") if t.strip()]
-                for tag in tag_list:
-                    ws_target.cell(row=dynamic_row, column=3).value = "addSelection"
-                    ws_target.cell(row=dynamic_row, column=4).value = f"id=allTags{i+1}"
-                    ws_target.cell(row=dynamic_row, column=5).value = f"label={tag}"
-                    dynamic_row += 1
-                # 點擊 Add 按鈕
-                ws_target.cell(row=dynamic_row, column=3).value = "click"
-                ws_target.cell(row=dynamic_row, column=4).value = f"id=btnAdd{i+1}"
-                ws_target.cell(row=dynamic_row, column=5).value = f"id=btnAdd{i+1}"
-                dynamic_row += 1
+        stores = str(ws_source.cell(row=data_row, column=31).value or "").strip()
+        if stores:
+            sids = [s.strip() for s in stores.split("#") if s.strip()]
+            ws_target.cell(row=dyn_r, column=3).value = "click"
+            ws_target.cell(row=dyn_r, column=4).value = "xpath=//input[@id='OfferStores_isAvailableAllStores' and @value='False']"
+            dyn_r += 1
+            ws_target.cell(row=dyn_r, column=3).value = "pause"
+            ws_target.cell(row=dyn_r, column=4).value = "1500"
+            dyn_r += 1
+            for sid in sids:
+                txp = f"xpath=//li[label[contains(text(), '{sid}')]]//input"
+                ws_target.cell(row=dyn_r, column=3).value = "executeScript"
+                ws_target.cell(row=dyn_r, column=4).value = f"var el = document.evaluate(\"{txp.replace('xpath=', '')}\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; if(el) el.scrollIntoView();"
+                dyn_r += 1
+                ws_target.cell(row=dyn_r, column=3).value = "click"
+                ws_target.cell(row=dyn_r, column=4).value = txp
+                dyn_r += 1
 
-        # 處理 Stores (AE 欄) - 修正後的 XPath 邏輯
-        stores_raw = str(ws_source.cell(row=data_row, column=31).value or "").strip()
-        if stores_raw:
-            store_ids = [s.strip() for s in stores_raw.split("#") if s.strip()]
-            if store_ids:
-                # 點選「非全門市」
-                ws_target.cell(row=dynamic_row, column=3).value = "click"
-                ws_target.cell(row=dynamic_row, column=4).value = "xpath=//input[@id='OfferStores_isAvailableAllStores' and @name='OfferStores.isAvailableAllStores' and @value='False']"
-                dynamic_row += 1
-                
-                # 等待列表載入
-                first_sid = store_ids[0]
-                ws_target.cell(row=dynamic_row, column=3).value = "waitForElementPresent"
-                ws_target.cell(row=dynamic_row, column=4).value = f"xpath=//li[label[contains(text(), '{first_sid}')]]//input"
-                ws_target.cell(row=dynamic_row, column=5).value = "15000"
-                dynamic_row += 1
-                
-                for sid in store_ids:
-                    # 使用修正後的定位：找到包含 ID 文字的 label，再找對應 input
-                    target_xpath = f"xpath=//li[label[contains(text(), '{sid}')]]//input"
-                    
-                    # 安全捲動
-                    safe_js = (
-                        f"var el = document.evaluate(\"{target_xpath.replace('xpath=', '')}\", "
-                        f"document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; "
-                        f"if(el) {{ el.scrollIntoView(); }} else {{ console.log('Store {sid} not found'); }}"
-                    )
-                    ws_target.cell(row=dynamic_row, column=3).value = "executeScript"
-                    ws_target.cell(row=dynamic_row, column=4).value = safe_js
-                    dynamic_row += 1
-                    
-                    # 勾選
-                    ws_target.cell(row=dynamic_row, column=3).value = "click"
-                    ws_target.cell(row=dynamic_row, column=4).value = target_xpath
-                    dynamic_row += 1
+        ws_target.cell(row=dyn_r, column=3).value = "click"
+        ws_target.cell(row=dyn_r, column=4).value = "id=btnSave2"
+        next_row = dyn_r + 1
 
-        # 最終儲存
-        ws_target.cell(row=dynamic_row, column=3).value = "click"
-        ws_target.cell(row=dynamic_row, column=4).value = "id=btnSave2"
-        ws_target.cell(row=dynamic_row, column=5).value = "id=btnSave2"
-        
-        next_row = dynamic_row + 1
-
-    # 3. 生成 JSON 指令清單
+    # 產出 JSON
     plexure_json = {"Name": int(datetime.datetime.now().strftime("%Y%m%d")), "CreationDate": 45951, "Commands": []}
-    plexure_json["Commands"].append({"Command": "open", "Target": str(d2_url), "Value": ""})
+    new_offer_xp = "xpath=//button[contains(@class, 'btn-primary') and .//span[contains(text(), 'New Offer')]]"
     
     curr_r = 3
-    current_template_name = ""
+    current_tpl = ""
     while curr_r <= ws_target.max_row:
         cmd = str(ws_target.cell(row=curr_r, column=3).value or "").strip()
         target = str(ws_target.cell(row=curr_r, column=4).value or "").strip()
         val = str(ws_target.cell(row=curr_r, column=5).value or "").strip()
 
-        if "ExtendedDataTemplateSelector" in target and cmd == "executeScript":
-            match = re.search(r"var targetText = '(.*?)';", target)
-            if match: current_template_name = match.group(1)
+        if curr_r == 3 or (str(ws_target.cell(row=curr_r-1, column=4).value) == "id=btnSave2"):
+            plexure_json["Commands"].append({"Command": "open", "Target": str(d2_url), "Value": ""})
+            plexure_json["Commands"].append({"Command": "waitForElementPresent", "Target": new_offer_xp, "Value": "30000"})
+            plexure_json["Commands"].append({"Command": "click", "Target": new_offer_xp})
 
         if cmd or target:
-            # 圖片存檔防呆與自動捲動
-            if "Promo_en_saveButton" in target or "Promo_zh_saveButton" in target:
-                clean_target = target.replace('id=', '')
-                plexure_json["Commands"].append({"Command": "executeScript", "Target": f"document.getElementById('{clean_target}').scrollIntoView();"})
-                plexure_json["Commands"].append({"Command": "pause", "Target": "3000"})
-
-            new_cmd = {"Command": cmd, "Target": target}
-            if val: new_cmd["Value"] = val
-            plexure_json["Commands"].append(new_cmd)
-
-            # 特定樣板百分比補位邏輯
-            if "ExtendedDataDynamicFields_8__Value" in target and cmd == "type":
-                if current_template_name == "MPA TW Discount Off Product(Percentage) Pre tax False":
-                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value"})
-                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value", "Value": "0"})
-
-            if "btnSave2" in target: 
-                plexure_json["Commands"].append({"Command": "pause", "Target": "1500"})
-                # 切換視窗以修復 bfcache 問題
+            if "ExtendedDataTemplateSelector" in target: current_tpl = val
+            plexure_json["Commands"].append({"Command": cmd, "Target": target, "Value": val})
+            if "btnSave2" in target:
                 plexure_json["Commands"].append({"Command": "selectWindow", "Target": "tab=0"})
         curr_r += 1
 
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 
 # ==========================================
-# Step 3: Flask 路由與認證
+# Flask 路由
 # ==========================================
 
 @app.route('/')
@@ -231,8 +173,8 @@ def index():
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    if data.get('username') == "admin" and data.get('password') == "12345":
+    d = request.get_json()
+    if d.get('username') == "admin" and d.get('password') == "12345":
         session['logged_in'] = True
         return jsonify({"status": "success"})
     return jsonify({"status": "error", "message": "帳號或密碼錯誤"})
@@ -240,17 +182,12 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index')) # 確保導回首頁
+    return redirect(url_for('index'))
 
 @app.route('/step1')
 def step1():
     if not session.get('logged_in'): return redirect(url_for('index'))
     return render_template('step1.html')
-
-@app.route('/step2')
-def step2():
-    if not session.get('logged_in'): return redirect(url_for('index'))
-    return render_template('step2.html')
 
 @app.route('/transform', methods=['POST'])
 def transform():
@@ -261,14 +198,14 @@ def transform():
         if image_base_path and not image_base_path.endswith(('/', '\\')): image_base_path += "/"
 
         df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
+        
         df = df[df.iloc[:, 11].notna()].reset_index(drop=True)
         out = pd.DataFrame()
-
+        
         def get_img(val):
             c = clean_empty_text(val)
             return f"{image_base_path}{c}" if c else ""
-
-        # CSV 欄位映射邏輯
+        
         out["Internal Name"] = df.iloc[:, 11]
         out["Base Weight"] = df.iloc[:, 14]
         out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
@@ -302,27 +239,28 @@ def transform():
         out["addSelection2"] = df.iloc[:, 45].apply(clean_empty_text)
         out["addSelection3"] = df.iloc[:, 46].apply(clean_empty_text)
         out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer: out.to_excel(writer, index=False)
-        output.seek(0)
-        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='data.xlsx')
+        # 最終存到 excel/data.xlsx
+        out.to_excel(os.path.join(EXCEL_DIR, 'data.xlsx'), index=False)
+        return jsonify({"status": "success"})
     except Exception as e:
-        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/step2')
+def step2():
+    if not session.get('logged_in'): return redirect(url_for('index'))
+    models = [file for file in os.listdir(EXCEL_DIR) if file.endswith('.xlsm')]
+    return render_template('step2.html', models=models)
 
 @app.route('/generate_result', methods=['POST'])
 def generate_result():
-    if not session.get('logged_in'): return redirect(url_for('index'))
     try:
-        data_file = request.files.get('dataFile')
-        model_file = request.files.get('modelFile')
-        if not data_file or not model_file: return "錯誤：未上傳完整檔案", 400
-        json_result = perform_transformation(data_file, model_file)
-        return render_template('result.html', json_content=json_result)
+        selected_model = request.form.get('modelFile')
+        data_p = os.path.join(EXCEL_DIR, 'data.xlsx')
+        model_p = os.path.join(EXCEL_DIR, selected_model)
+        json_res = perform_transformation(data_p, model_p)
+        return render_template('result.html', json_content=json_res)
     except Exception as e:
-        traceback.print_exc()
-        return f"發生錯誤：{str(e)}", 500
+        return f"錯誤：{str(e)}", 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
