@@ -64,7 +64,7 @@ def get_extended_template(text):
     return ""
 
 # ==========================================
-# Step 2: 核心轉換函式 (解決 NameError)
+# Step 2: 核心轉換函式 (JSON 產出邏輯)
 # ==========================================
 
 def perform_transformation(data_stream, model_stream):
@@ -73,26 +73,26 @@ def perform_transformation(data_stream, model_stream):
     wb_target = openpyxl.load_workbook(model_stream)
     ws_target = wb_target.worksheets[0]
 
-    # 定義 Excel 固定對應地址 (E9 到 E76)
+    # 固定填寫的 Excel 地址對應
     target_cells_addr = [
         "E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36",
         "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62",
         "E64", "E66", "D69", "E71", "E73", "E75", "E77"
     ]
     
-    template_height = 76 # 基礎樣板高度 (到 E76)
+    template_height = 76 
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
     for data_row in range(2, ws_source.max_row + 1):
-        # 0. 複製基礎樣板 (複製 1 到 76 行的內容)
         if data_row > 2:
+            # 複製基礎樣板內容
             for r_offset in range(template_height):
                 for c in range(1, ws_target.max_column + 1):
                     ws_target.cell(row=next_row + r_offset, column=c).value = \
                         ws_target.cell(row=3 + r_offset, column=c).value
 
-        # 1. 填寫固定欄位 (E9 ~ E76)
+        # 1. 填寫固定欄位
         for i, addr in enumerate(target_cells_addr):
             source_col = i + 1
             source_val = str(ws_source.cell(row=data_row, column=source_col).value or "").strip()
@@ -101,75 +101,86 @@ def perform_transformation(data_stream, model_stream):
             target_cell = ws_target.cell(row=target_r, column=orig_cell.column)
             target_cell.number_format = "@"
 
-            if addr == "D20":
+            if addr == "D20": # 樣板選擇
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
                 target_cell.value = f"var targetText = '{source_val}'; var $select = window.jQuery('#ExtendedDataTemplateSelector'); var $opt = $select.find('option').filter(function() {{ return window.jQuery(this).text().trim() === targetText; }}); if($opt.length > 0) {{ $select.val($opt.val()).trigger('change'); }}"
-            elif addr == "D69":
+            elif addr == "D69": # 類別選擇 (修正 Select2)
                 ws_target.cell(row=target_r, column=3).value = "executeScript"
-                target_cell.value = f"(function(){{var t='{source_val}';var s=window.jQuery('#OfferDetails_CategoryId');var v=s.find('option').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).val();if(v){{s.val(v).trigger('change').trigger('change.select2');}}window.jQuery('.select2-result-label').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).click();}})();"
-            elif addr == "E76":
+                safe_val = source_val.replace("'", "\\'")
+                target_cell.value = f"(function(){{var t='{safe_val}';var s=window.jQuery('#OfferDetails_CategoryId');var v=s.find('option').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).val();if(v){{s.val(v).trigger('change').trigger('change.select2');}}window.jQuery('.select2-result-label').filter(function(){{return window.jQuery(this).text().trim().indexOf(t)>-1;}}).click();}})();"
+            elif addr == "E77": # 條款處理
                 ws_target.cell(row=target_r, column=3).value = "type"
                 ws_target.cell(row=target_r, column=4).value = "id=OfferDetails_TermsAndConditionsTranslated_zh_"
                 if not source_val or source_val.lower() == "nan":
-                    source_val = "每券限兌換一次。每筆交易可以同時使用多張不同品項之回饋券或優惠券。"
+                    source_val = ""
                 target_cell.value = source_val
             else:
                 target_cell.value = source_val
 
-        # 當前動態指令起始行 (在 E76 之後)
+        # 2. 動態追加內容 (Tags & Stores)
         dynamic_row = next_row + template_height
 
-        # 2. 處理 AddSelection (對應 VBA 的 AB, AC, AD 欄位)
-        # 根據 CSV：AB=28, AC=29, AD=30
+        # 處理 Tags (AB, AC, AD 欄)
         selection_cols = [28, 29, 30] 
         for i, col_idx in enumerate(selection_cols):
             cell_text = str(ws_source.cell(row=data_row, column=col_idx).value or "").strip()
             if cell_text:
                 tag_list = [t.strip() for t in cell_text.split(",") if t.strip()]
-                if tag_list:
-                    for tag in tag_list:
-                        ws_target.cell(row=dynamic_row, column=3).value = "addSelection"
-                        ws_target.cell(row=dynamic_row, column=4).value = f"id=allTags{i+1}"
-                        ws_target.cell(row=dynamic_row, column=5).value = f"label={tag}"
-                        dynamic_row += 1
-                    # 補上點擊 Add 按鈕
-                    ws_target.cell(row=dynamic_row, column=3).value = "click"
-                    ws_target.cell(row=dynamic_row, column=4).value = f"id=btnAdd{i+1}"
-                    ws_target.cell(row=dynamic_row, column=5).value = f"id=btnAdd{i+1}"
+                for tag in tag_list:
+                    ws_target.cell(row=dynamic_row, column=3).value = "addSelection"
+                    ws_target.cell(row=dynamic_row, column=4).value = f"id=allTags{i+1}"
+                    ws_target.cell(row=dynamic_row, column=5).value = f"label={tag}"
                     dynamic_row += 1
+                # 點擊 Add 按鈕
+                ws_target.cell(row=dynamic_row, column=3).value = "click"
+                ws_target.cell(row=dynamic_row, column=4).value = f"id=btnAdd{i+1}"
+                ws_target.cell(row=dynamic_row, column=5).value = f"id=btnAdd{i+1}"
+                dynamic_row += 1
 
-        # 3. 處理 Stores 門市 (對應 VBA 的 AE 欄位)
-        # 根據 CSV：AE=31
+        # 處理 Stores (AE 欄) - 修正後的 XPath 邏輯
         stores_raw = str(ws_source.cell(row=data_row, column=31).value or "").strip()
         if stores_raw:
             store_ids = [s.strip() for s in stores_raw.split("#") if s.strip()]
             if store_ids:
-                # 點選「非全門市」選項 (依據 VBA 邏輯)
+                # 點選「非全門市」
                 ws_target.cell(row=dynamic_row, column=3).value = "click"
                 ws_target.cell(row=dynamic_row, column=4).value = "xpath=//input[@id='OfferStores_isAvailableAllStores' and @name='OfferStores.isAvailableAllStores' and @value='False']"
                 dynamic_row += 1
                 
+                # 等待列表載入
+                first_sid = store_ids[0]
+                ws_target.cell(row=dynamic_row, column=3).value = "waitForElementPresent"
+                ws_target.cell(row=dynamic_row, column=4).value = f"xpath=//li[label[contains(text(), '{first_sid}')]]//input"
+                ws_target.cell(row=dynamic_row, column=5).value = "15000"
+                dynamic_row += 1
+                
                 for sid in store_ids:
-                    target_xpath = f"xpath=//input[@name='OfferStores.venues' and @value='{sid}']"
-                    # Type Store ID
-                    ws_target.cell(row=dynamic_row, column=3).value = "type"
-                    ws_target.cell(row=dynamic_row, column=4).value = target_xpath
-                    ws_target.cell(row=dynamic_row, column=5).value = sid
+                    # 使用修正後的定位：找到包含 ID 文字的 label，再找對應 input
+                    target_xpath = f"xpath=//li[label[contains(text(), '{sid}')]]//input"
+                    
+                    # 安全捲動
+                    safe_js = (
+                        f"var el = document.evaluate(\"{target_xpath.replace('xpath=', '')}\", "
+                        f"document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; "
+                        f"if(el) {{ el.scrollIntoView(); }} else {{ console.log('Store {sid} not found'); }}"
+                    )
+                    ws_target.cell(row=dynamic_row, column=3).value = "executeScript"
+                    ws_target.cell(row=dynamic_row, column=4).value = safe_js
                     dynamic_row += 1
-                    # Click Checkbox
+                    
+                    # 勾選
                     ws_target.cell(row=dynamic_row, column=3).value = "click"
                     ws_target.cell(row=dynamic_row, column=4).value = target_xpath
                     dynamic_row += 1
 
-        # 4. 結尾：儲存按鈕
+        # 最終儲存
         ws_target.cell(row=dynamic_row, column=3).value = "click"
         ws_target.cell(row=dynamic_row, column=4).value = "id=btnSave2"
         ws_target.cell(row=dynamic_row, column=5).value = "id=btnSave2"
         
-        # 更新 next_row 供下一筆資料使用
         next_row = dynamic_row + 1
 
-    # --- 產出 JSON 部分 ---
+    # 3. 生成 JSON 指令清單
     plexure_json = {"Name": int(datetime.datetime.now().strftime("%Y%m%d")), "CreationDate": 45951, "Commands": []}
     plexure_json["Commands"].append({"Command": "open", "Target": str(d2_url), "Value": ""})
     
@@ -185,43 +196,36 @@ def perform_transformation(data_stream, model_stream):
             if match: current_template_name = match.group(1)
 
         if cmd or target:
-            # 圖片按鈕滾動邏輯
+            # 圖片存檔防呆與自動捲動
             if "Promo_en_saveButton" in target or "Promo_zh_saveButton" in target:
-                plexure_json["Commands"].append({
-                    "Command": "executeScript",
-                    "Target": f"document.getElementById('{target.replace('id=', '')}').scrollIntoView();"
-                })
+                clean_target = target.replace('id=', '')
+                plexure_json["Commands"].append({"Command": "executeScript", "Target": f"document.getElementById('{clean_target}').scrollIntoView();"})
                 plexure_json["Commands"].append({"Command": "pause", "Target": "3000"})
 
             new_cmd = {"Command": cmd, "Target": target}
             if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
 
-            # 特定模組注入邏輯
+            # 特定樣板百分比補位邏輯
             if "ExtendedDataDynamicFields_8__Value" in target and cmd == "type":
                 if current_template_name == "MPA TW Discount Off Product(Percentage) Pre tax False":
                     plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value"})
                     plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value", "Value": "0"})
 
             if "btnSave2" in target: 
-                plexure_json["Commands"].append({"Command": "pause", "Target": "1000"})
-                # 修復 bfcache 報錯問題
+                plexure_json["Commands"].append({"Command": "pause", "Target": "1500"})
+                # 切換視窗以修復 bfcache 問題
                 plexure_json["Commands"].append({"Command": "selectWindow", "Target": "tab=0"})
         curr_r += 1
 
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
+
 # ==========================================
-# Step 3: Flask 路由 (含安全性)
+# Step 3: Flask 路由與認證
 # ==========================================
 
 @app.route('/')
 def index():
-    # 如果有登入，標籤會引導你來這裡，然後被這行踢去 /step1
-    if session.get('logged_in'): 
-        return redirect(url_for('step1'))
-    return render_template('index.html')
-
-def login_page():
     if session.get('logged_in'): return redirect(url_for('step1'))
     return render_template('index.html')
 
@@ -233,14 +237,19 @@ def login():
         return jsonify({"status": "success"})
     return jsonify({"status": "error", "message": "帳號或密碼錯誤"})
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index')) # 確保導回首頁
+
 @app.route('/step1')
 def step1():
-    if not session.get('logged_in'): return redirect(url_for('login_page'))
+    if not session.get('logged_in'): return redirect(url_for('index'))
     return render_template('step1.html')
 
 @app.route('/step2')
 def step2():
-    if not session.get('logged_in'): return redirect(url_for('login_page'))
+    if not session.get('logged_in'): return redirect(url_for('index'))
     return render_template('step2.html')
 
 @app.route('/transform', methods=['POST'])
@@ -259,7 +268,7 @@ def transform():
             c = clean_empty_text(val)
             return f"{image_base_path}{c}" if c else ""
 
-        # Excel 欄位對應
+        # CSV 欄位映射邏輯
         out["Internal Name"] = df.iloc[:, 11]
         out["Base Weight"] = df.iloc[:, 14]
         out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
@@ -294,7 +303,6 @@ def transform():
         out["addSelection3"] = df.iloc[:, 46].apply(clean_empty_text)
         out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
         
-        out = out[~out["Internal Name"].astype(str).str.contains("系統排序", na=False)]
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer: out.to_excel(writer, index=False)
         output.seek(0)
@@ -305,33 +313,16 @@ def transform():
 
 @app.route('/generate_result', methods=['POST'])
 def generate_result():
-    if not session.get('logged_in'):
-        return redirect(url_for('index'))
-    
+    if not session.get('logged_in'): return redirect(url_for('index'))
     try:
         data_file = request.files.get('dataFile')
         model_file = request.files.get('modelFile')
-
-        # --- 新增後端防禦檢查 ---
-        if not data_file or data_file.filename == '':
-            return "錯誤：未上傳資料表 (data.xlsx)", 400
-        if not model_file or model_file.filename == '':
-            return "錯誤：未上傳 UI 樣板 (modle.xlsm)", 400
-
-        # 執行轉換
+        if not data_file or not model_file: return "錯誤：未上傳完整檔案", 400
         json_result = perform_transformation(data_file, model_file)
-        
         return render_template('result.html', json_content=json_result)
-        
     except Exception as e:
         traceback.print_exc()
-        # 這裡會捕捉到 Zip 相關錯誤，並顯示比較友善的訊息
-        return f"發生錯誤：{str(e)}。請確認上傳的是正確的 Excel 檔案格式。", 500
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
+        return f"發生錯誤：{str(e)}", 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
