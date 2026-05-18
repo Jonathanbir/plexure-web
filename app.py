@@ -71,7 +71,7 @@ def perform_transformation(data_path, model_path):
     ws_target = wb_target.worksheets[0]
 
     target_cells_addr = ["E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62", "E64", "E66", "D69", "E71", "E73", "E75", "E77"]
-    template_height = 77
+    template_height = 76
     next_row = 3
     d2_url = ws_target.cell(row=2, column=4).value
 
@@ -137,28 +137,44 @@ def perform_transformation(data_path, model_path):
         ws_target.cell(row=dyn_r, column=4).value = "id=btnSave2"
         next_row = dyn_r + 1
 
-    # 產出 JSON
+   # --- 修正後的 JSON 產出邏輯 ---
     plexure_json = {"Name": int(datetime.datetime.now().strftime("%Y%m%d")), "CreationDate": 45951, "Commands": []}
     new_offer_xp = "xpath=//button[contains(@class, 'btn-primary') and .//span[contains(text(), 'New Offer')]]"
-    
-    curr_r = 3
-    current_tpl = ""
-    while curr_r <= ws_target.max_row:
-        cmd = str(ws_target.cell(row=curr_r, column=3).value or "").strip()
-        target = str(ws_target.cell(row=curr_r, column=4).value or "").strip()
-        val = str(ws_target.cell(row=curr_r, column=5).value or "").strip()
 
+    # 使用 values 快速讀取整列資料
+    rows = list(ws_target.iter_rows(min_row=3, max_col=5, values_only=True))
+    
+    for idx, row in enumerate(rows):
+        curr_r = idx + 3
+        cmd = str(row[2] or "").strip()    # 欄位 3
+        target = str(row[3] or "").strip() # 欄位 4
+        val = str(row[4] or "").strip()    # 欄位 5
+
+        # 1. 判斷是否為每一筆資料的開頭：插入 Open 與 Click New Offer
+        # 條件：行號為 3 (第一筆) 或是前一行的 Target 是 btnSave2 (代表上一筆結束)
         if curr_r == 3 or (str(ws_target.cell(row=curr_r-1, column=4).value) == "id=btnSave2"):
             plexure_json["Commands"].append({"Command": "open", "Target": str(d2_url), "Value": ""})
-            plexure_json["Commands"].append({"Command": "waitForElementPresent", "Target": new_offer_xp, "Value": "30000"})
-            plexure_json["Commands"].append({"Command": "click", "Target": new_offer_xp})
 
+        # 2. 處理當前指令 (必須在迴圈內)
         if cmd or target:
-            if "ExtendedDataTemplateSelector" in target: current_tpl = val
-            plexure_json["Commands"].append({"Command": cmd, "Target": target, "Value": val})
+            # 圖片儲存防呆捲動
+            if "Promo_en_saveButton" in target or "Promo_zh_saveButton" in target:
+                clean_id = target.replace('id=', '')
+                plexure_json["Commands"].append({
+                    "Command": "executeScript", 
+                    "Target": f"document.getElementById('{clean_id}').scrollIntoView();"
+                })
+                plexure_json["Commands"].append({"Command": "pause", "Target": "2000"})
+
+            # 加入指令
+            new_cmd = {"Command": cmd, "Target": target}
+            if val: new_cmd["Value"] = val
+            plexure_json["Commands"].append(new_cmd)
+            
+            # 存檔後切換分頁以穩定流程
             if "btnSave2" in target:
+                plexure_json["Commands"].append({"Command": "pause", "Target": "1500"})
                 plexure_json["Commands"].append({"Command": "selectWindow", "Target": "tab=0"})
-        curr_r += 1
 
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 

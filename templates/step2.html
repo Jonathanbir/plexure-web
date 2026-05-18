@@ -101,11 +101,29 @@
         font-weight: bold;
       }
 
-      input[type="file"] {
+      input {
         width: 100%;
-        padding: 8px;
+        padding: 10px;
+        border-radius: 6px;
         border: 1px solid #ddd;
-        border-radius: 4px;
+        box-sizing: border-box;
+      }
+
+      input[type="text"] {
+        color: #666;
+        font-size: 12px;
+        font-weight: 500;
+        background: #eee;
+      }
+
+      #modelFile {
+        width: 100%;
+        padding: 10px;
+        color: #666;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
+        border: 1px solid #ddd;
         box-sizing: border-box;
       }
 
@@ -207,12 +225,21 @@
         <p class="login-message" id="RequestUserPass-Message"></p>
         <div class="upload-section">
           <div class="upload-group">
-            <label for="dataFile">1. 上傳資料表 (data.xlsx)</label>
-            <input type="file" id="dataFile" name="dataFile" accept=".xlsx" />
+            <label>1. 資料表狀態</label>
+            <input type="text" value="資料表已就緒" disabled />
           </div>
           <div class="upload-group">
-            <label for="modelFile">2. 上傳 modle 樣板 (modle.xlsm)</label>
-            <input type="file" id="modelFile" name="modelFile" accept=".xlsm" />
+            <label>2. 選擇填單Template </label>
+            <select
+              id="modelFile"
+              name="modelFile"
+              style="width: 100%; padding: 10px"
+            >
+              <option value="">-- 請選擇樣板 --</option>
+              {% for model in models %}
+              <option value="{{ model }}">{{ model }}</option>
+              {% endfor %}
+            </select>
           </div>
         </div>
         <div class="btn-group">
@@ -225,152 +252,55 @@
     </div>
     <script>
       $(document).ready(function () {
-        const dataFileInput = document.getElementById("dataFile");
-        const modelFileInput = document.getElementById("modelFile");
         const msgEl = document.getElementById("RequestUserPass-Message");
-        const statusMsg = document.getElementById("statusMsg");
-        const form = document.getElementById("jsonForm");
+        const btn = $("#runTransform");
 
-        dataFileInput.addEventListener("change", function () {
-          var fileInput = this;
-
-          // 判斷是否有選取檔案 (檢查 files 陣列長度)
-          if (fileInput.files.length > 0) {
-            fileInput.classList.remove("input-error");
-            msgEl.innerText = "";
-            msgEl.classList.remove("login-witherror");
-          } else {
-            fileInput.classList.add("input-error");
-            msgEl.innerText = "請先上傳資料表";
-            msgEl.classList.add("login-witherror");
-          }
-        });
-
-        modelFileInput.addEventListener("change", function () {
-          var fileInput = this;
-
-          // 判斷是否有選取檔案 (檢查 files 陣列長度)
-          if (fileInput.files.length > 0) {
-            fileInput.classList.remove("input-error");
-            msgEl.innerText = "";
-            msgEl.classList.remove("login-witherror");
-          } else {
-            fileInput.classList.add("input-error");
-            msgEl.innerText = "請先上傳modle樣板";
-            msgEl.classList.add("login-witherror");
-          }
-        });
-
-        $("#runTransform").click(function (e) {
+        btn.click(function (e) {
           e.preventDefault();
 
-          // 重置樣式
-          dataFileInput.classList.remove("input-error");
-          modelFileInput.classList.remove("input-error");
+          // 1. 取得選擇的樣板檔名
+          const selectedModel = $("#modelFile").val();
+
+          // 2. 檢查是否有選擇
+          if (!selectedModel) {
+            msgEl.innerText = "請選擇一個填單Template";
+            msgEl.classList.add("login-witherror");
+            $("#modelFile").addClass("input-error");
+            return;
+          }
+
+          // 3. 準備資料
+          var formData = new FormData();
+          formData.append("modelFile", selectedModel);
+
+          // 4. UI 狀態更新
+          btn.prop("disabled", true).html(`
+                <div class="loading-content">
+                    <span>處理中</span>
+                    <div class="spinner"></div>
+                </div>
+            `);
+          msgEl.innerText = "正在讀取伺服器資料並轉換 JSON...";
           msgEl.classList.remove("login-witherror");
+          $("#modelFile").removeClass("input-error");
 
-          // 1. 檢查檔案是否存在
-          if (dataFileInput.files.length === 0) {
-            dataFileInput.classList.add("input-error");
-            msgEl.innerText = "請上傳資料表";
-            msgEl.classList.add("login-witherror");
-            statusMsg.innerText = "";
-            // 檔案輸入框無法用 focus() 強制開啟，提示使用者即可
-            return;
-          }
-
-          // 檢查 modle.xlsm
-          if (modelFileInput.files.length === 0) {
-            modelFileInput.classList.add("input-error");
-            msgEl.innerText = "請上傳modle樣板";
-            msgEl.classList.add("login-witherror");
-            statusMsg.innerText = "";
-            // 檔案輸入框無法用 focus() 強制開啟，提示使用者即可
-            return;
-          }
-
-          // 2. 準備上傳資料
-          var formData = new FormData(document.getElementById("jsonForm"));
-          var btn = $(this);
-          let waitTimer;
-
-          btn.prop("disabled", true);
-
-          let tenSecTimer;
-          let twoMinTimer;
-          let currentAjax;
-
-          // 3. 開始執行 AJAX
+          // 5. 執行 AJAX
           $.ajax({
             url: "/generate_result",
             type: "POST",
             data: formData,
-            contentType: false,
             processData: false,
-            xhr: function () {
-              var xhr = new window.XMLHttpRequest();
-              // 監聽上傳進度
-              xhr.upload.addEventListener(
-                "progress",
-                function (evt) {
-                  if (evt.lengthComputable) {
-                    // 更新按鈕文字：數字 + 旋轉圓圈
-                    btn.html(`
-                    <div class="loading-content">
-                      <div class="spinner"></div>
-                    </div>
-                  `);
-                  }
-                },
-                false,
-              );
-              return xhr;
-            },
-            beforeSend: function () {
-              btn.prop("disabled", true);
-              msgEl.innerText = "正在傳送檔案並產出 JSON...";
-              msgEl.classList.remove("login-witherror");
-
-              // --- 核心邏輯：設定 10 秒計時器 ---
-              tenSecTimer = setTimeout(function () {
-                statusMsg.innerText = "檔案稍大，處理中請稍候...";
-              }, 10000);
-
-              // --- 核心邏輯：設定 120 秒計時器 ---
-              twoMinTimer = setTimeout(function () {
-                // 1. 取消 AJAX 請求
-                if (currentAjax) currentAjax.abort();
-
-                // 2. 恢復按鈕樣式與文字
-                btn.prop("disabled", false).text("產出最終 JSON");
-
-                // 3. 修改提示文字
-                statusMsg.innerText =
-                  "請確認上傳資料是否正確! (處理時間過長已自動停止)";
-              }, 120000);
-            },
+            contentType: false,
             success: function (response) {
-              // --- 成功時：清除計時器 ---
-              clearTimeout(tenSecTimer);
-              clearTimeout(twoMinTimer);
-
+              // 成功後直接替換頁面內容顯示結果
               document.open();
               document.write(response);
               document.close();
             },
-            error: function (xhr, textStatus, errorThrown) {
-              // --- 失敗時：一定要清除計時器並恢復按鈕 ---
-              clearTimeout(tenSecTimer);
-              clearTimeout(twoMinTimer);
-
-              let errorDesc = "轉換失敗，請確認 Excel 內容是否正確。";
-              if (textStatus === "timeout") {
-                errorDesc = "伺服器處理超時（60秒），請嘗試縮小資料量。";
-              }
-
-              statusMsg.innerText = errorDesc;
-              btn.prop("disabled", false).text("產出最終 JSON"); // 恢復按鈕文字
-              msgEl.innerText = "已停止處理。";
+            error: function (xhr) {
+              alert("轉換失敗，請確認伺服器 excel 資料夾內是否有 data.xlsx");
+              btn.prop("disabled", false).text("產出最終 JSON");
+              msgEl.innerText = "伺服器處理錯誤";
               msgEl.classList.add("login-witherror");
             },
           });
