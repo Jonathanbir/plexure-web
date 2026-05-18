@@ -53,10 +53,15 @@ def split_time(text):
 def get_extended_template(text):
     if pd.isna(text): return ""
     t = str(text)
-    if re.search(r"\+.*(?:特價|限時優惠)", t): return "TW Price Deal - Two Product Sets - Reduced Price"
-    if re.search(r"滿.*(?:送|折)|單點.*折", t): return "MPA TW Discount Off Product(Percentage) Pre tax False"
-    if re.search(r"買一送一|買.*送|單點.*送", t): return "TW Buy One Get One Or Another Discounted(Percentage)"
-    if re.search(r"現折|單點.*特價", t): return "MPA TW Discount Off Product($Amount) Pre tax False"
+    if re.search(r"單點.*(?:打?\d+折|折.*%)", t):return "MPA TW Discount Off Product(Percentage) Pre tax False"
+    if re.search(r"單點.*折.*\d+|買.*現折|單點.*特價", t): return "MPA TW Discount Off Product($Amount) Pre tax False"
+    if re.search(r"買一送一|買.*送|單點.*送|單筆.*滿.*送", t): 
+        # 排除加錢送的狀況（交給下面處理）
+        if not re.search(r"加(?:\$|\d+元).*送", t):
+            return "TW Buy One Get One Or Another Discounted(Percentage)"
+    if re.search(r"單點.*加(?:\$|\d+元).*送", t): return  "TW Buy One Get One Or Another Discounted($Amount)"
+    if re.search(r"單筆.*滿.*折", t): return "MPA TW Discount Off Total Order(Percentage) Pre Tax False"
+    if re.search(r"單筆.*滿.*現折.*\$", t): return "MPA TW Discount Off Total Order($Amount) Pre tax False"
     return ""
 
 # ==========================================
