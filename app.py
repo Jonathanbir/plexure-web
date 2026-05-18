@@ -205,6 +205,11 @@ def step1():
     if not session.get('logged_in'): return redirect(url_for('index'))
     return render_template('step1.html')
 
+@app.route('/result', methods=['GET'])
+def result_get():
+    # 防呆：如果使用者在 /result 頁面不小心按到重新整理，自動幫他導回 step2
+    return redirect(url_for('step2'))
+
 @app.route('/transform', methods=['POST'])
 def transform():
     if not session.get('logged_in'): return jsonify({"status": "error", "message": "請登入"}), 401

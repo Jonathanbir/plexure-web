@@ -237,7 +237,10 @@
             >
               <option value="">-- 請選擇樣板 --</option>
               {% for model in models %}
-              <option value="{{ model }}">{{ model }}</option>
+              <option value="{{ model }}">
+                {% if model == 'Loyalty.xlsm' %} Loyalty Card {% elif model ==
+                'Offers.xlsm' %} Offers Card {% else %} {{ model }} {% endif %}
+              </option>
               {% endfor %}
             </select>
           </div>
@@ -296,6 +299,7 @@
               document.open();
               document.write(response);
               document.close();
+              history.pushState(null, "", "/result");
             },
             error: function (xhr) {
               alert("轉換失敗，請確認伺服器 excel 資料夾內是否有 data.xlsx");
