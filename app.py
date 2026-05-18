@@ -68,16 +68,21 @@ def get_extended_template(text):
 # 核心轉換邏輯 (JSON 產出)
 # ==========================================
 
-def perform_transformation(data_path, model_path):
-    # 此處接收的是檔案路徑
+def perform_transformation(data_path, model_path, location_path=None):
     wb_source = openpyxl.load_workbook(data_path, data_only=True)
     ws_source = wb_source.worksheets[0]
     wb_target = openpyxl.load_workbook(model_path)
     ws_target = wb_target.worksheets[0]
 
+    # 【核心改動】如果使用者有輸入新網址，直接強制覆寫樣板的 D2 欄位 (第 2 行，第 4 欄)
+    if location_path:
+        ws_target.cell(row=2, column=4).value = str(location_path).strip()
+
     target_cells_addr = ["E9", "E19", "D20", "E24", "E26", "E28", "E30", "E32", "E34", "E36", "E38", "E40", "E42", "E47", "E52", "E54", "E56", "E58", "E60", "E62", "E64", "E66", "D69", "E71", "E73", "E75", "E77"]
     template_height = 76
     next_row = 3
+    
+    # 此時讀取的 d2_url 就會是使用者剛剛輸入的新網址了！
     d2_url = ws_target.cell(row=2, column=4).value
 
     for data_row in range(2, ws_source.max_row + 1):
@@ -221,7 +226,16 @@ def transform():
     try:
         file = request.files.get('file')
         image_base_path = request.form.get('imagePath', "").strip()
-        if image_base_path and not image_base_path.endswith(('/', '\\')): image_base_path += "/"
+        location_path = request.form.get('locationPath', "").strip()
+
+        if not file:
+                    return jsonify({"status": "error", "message": "未接收到檔案"})
+
+        # 【新增】將網址存在 Session 暫存，供 Step 2 使用
+        session['location_path'] = location_path
+
+        if image_base_path and not image_base_path.endswith(('/', '\\')): 
+            image_base_path += "/"
 
         df = pd.read_excel(file, header=None, skiprows=2, engine='openpyxl')
         
@@ -283,7 +297,13 @@ def generate_result():
         selected_model = request.form.get('modelFile')
         data_p = os.path.join(EXCEL_DIR, 'data.xlsx')
         model_p = os.path.join(EXCEL_DIR, selected_model)
-        json_res = perform_transformation(data_p, model_p)
+
+        # 【新增】從 Session 中取出 Step 1 填寫的網址
+        location_path = session.get('location_path', "")
+
+        # 【修改】將網址變數傳入轉換函式
+        json_res = perform_transformation(data_p, model_p, location_path)
+
         return render_template('result.html', json_content=json_res)
     except Exception as e:
         return f"錯誤：{str(e)}", 500

@@ -229,25 +229,43 @@
       <div class="workspace">
         <h2>Plexure 自動化機器人 Step1</h2>
         <p class="login-message" id="RequestUserPass-Message"></p>
-        <div class="upload-group">
-          <label for="imagePath">圖片路徑</label>
-          <input
-            type="text"
-            id="imagePath"
-            placeholder="請輸入圖片存放資料夾路徑"
-            style="
-              width: 100%;
-              padding: 10px;
-              border-radius: 6px;
-              border: 1px solid #ddd;
-              box-sizing: border-box;
-            "
-            value=""
-          />
-        </div>
-        <div class="upload-group">
-          <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
-          <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
+        <div class="upload-section">
+          <div class="upload-group">
+            <label for="locationPath">網址連結</label>
+            <input
+              type="text"
+              id="locationPath"
+              placeholder="請輸入網址連結 (例如: https://admin-tjl540.vmobapps.com/...)"
+              style="
+                width: 100%;
+                padding: 10px;
+                border-radius: 6px;
+                border: 1px solid #ddd;
+                box-sizing: border-box;
+              "
+              value=""
+            />
+          </div>
+          <div class="upload-group">
+            <label for="imagePath">圖片路徑</label>
+            <input
+              type="text"
+              id="imagePath"
+              placeholder="請輸入圖片存放資料夾路徑"
+              style="
+                width: 100%;
+                padding: 10px;
+                border-radius: 6px;
+                border: 1px solid #ddd;
+                box-sizing: border-box;
+              "
+              value=""
+            />
+          </div>
+          <div class="upload-group">
+            <label for="plexureFile">請選擇檔案 (.xlsm 或 .xlsx)：</label>
+            <input type="file" id="plexureFile" accept=".xlsx, .xlsm" />
+          </div>
         </div>
 
         <button id="runTransform" class="btn-submit">下一步</button>
@@ -257,6 +275,8 @@
     <script>
       $(document).ready(function () {
         const imageInput = document.getElementById("imagePath");
+        const locationInput = document.getElementById("locationPath");
+        const locationPath = $("#locationPath").val().trim();
         const fileInput = document.getElementById("plexureFile");
         const file = $("#plexureFile")[0].files[0];
         const msgEl = document.getElementById("RequestUserPass-Message");
@@ -277,6 +297,26 @@
             } else {
               // 當內容被刪光時，立刻顯示錯誤樣式
               imageInput.classList.add("input-error");
+              msgEl.innerText = "請填圖片路徑";
+              msgEl.classList.add("login-witherror");
+            }
+          });
+
+        // 監聽網址連結輸入框的 input 事件
+        document
+          .getElementById("locationPath")
+          .addEventListener("input", function () {
+            var locationInput = this;
+            var val = locationInput.value.trim();
+
+            if (val !== "") {
+              // 當有輸入內容時，立刻移除錯誤樣式
+              locationInput.classList.remove("input-error");
+              msgEl.innerText = "";
+              msgEl.classList.remove("login-witherror");
+            } else {
+              // 當內容被刪光時，立刻顯示錯誤樣式
+              locationInput.classList.add("input-error");
               msgEl.innerText = "請填圖片路徑";
               msgEl.classList.add("login-witherror");
             }
@@ -303,11 +343,22 @@
         // 1. 點擊產出
         $("#runTransform").click(function () {
           var imageInput = document.getElementById("imagePath");
+          var locationInput = document.getElementById("locationPath");
+          var locationPath = $("#locationPath").val().trim();
           var fileInput = document.getElementById("plexureFile");
 
           var imagePath = imageInput.value.trim();
 
           // --- 判斷 1：圖片路徑 ---
+          if (locationPath === "") {
+            locationInput.classList.add("input-error");
+            msgEl.innerText = "請填網址連結";
+            msgEl.classList.add("login-witherror");
+            locationInput.focus();
+            return;
+          }
+
+          // --- 判斷 2：圖片路徑 ---
           if (imagePath === "") {
             imageInput.classList.add("input-error");
             msgEl.innerText = "請填圖片路徑";
@@ -316,7 +367,7 @@
             return;
           }
 
-          // --- 判斷 2：檢查檔案 (關鍵修正) ---
+          // --- 判斷 3：檢查檔案 (關鍵修正) ---
           if (fileInput.files.length === 0) {
             fileInput.classList.add("input-error");
             msgEl.innerText = "請先選擇原始 plexure.xlsm 檔案！";
@@ -329,6 +380,7 @@
           var formData = new FormData();
           formData.append("file", fileInput.files[0]); // 抓取第一個檔案
           formData.append("imagePath", imagePath);
+          formData.append("locationPath", locationPath);
 
           var btn = $(this);
           // 顯示處理中狀態
