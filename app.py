@@ -64,6 +64,60 @@ def get_extended_template(text):
     if re.search(r"單筆.*滿.*現折.*\$", t): return "MPA TW Discount Off Total Order($Amount) Pre tax False"
     return ""
 
+def generate_tags(promo_text, original_tags_raw):
+    # 預設一定會有的必帶字串
+    tags = ["Claim Type > Scan And Go QR"]
+    
+    # 確保傳進來的文字是字串，並防呆
+    t = str(promo_text or "").strip()
+    
+    # 規則 1：麥粉
+    if "麥粉" in t:
+        tags.append("Deal Filter Tag > dealFilter1")
+        
+    # 規則 2：鑰匙圈
+    if "鑰匙圈" in t:
+        tags.append("Deal Filter Tag > dealFilter2")
+        
+    # 規則 3：手機點餐
+    if "手機點餐" in t:
+        tags.append("Deal Filter Tag > dealFilter3")
+        
+    # 規則 4：歡樂送
+    if "歡樂送" in t:
+        tags.append("Deal Filter Tag > dealFilter4")
+        
+    # 規則 5：甜心卡
+    if "甜心卡" in t:
+        tags.append("Deal Filter Tag > dealFilter5")
+        
+    # 規則 6：早餐、薯餅、鬆餅、滿福、蛋堡、焙果
+    if any(kw in t for kw in ["早餐", "薯餅", "鬆餅", "滿福", "蛋堡", "焙果"]):
+        tags.append("Deal Filter Tag > dealFilter6")
+        
+    # 規則 7：超值全餐、鷄塊、麥脆鷄、勁辣香鷄翅、勁辣鷄腿堡、大麥克、牛肉、吉事、堡
+    if any(kw in t for kw in ["超值全餐", "鷄塊", "麥脆鷄", "勁辣香鷄翅", "勁辣鷄腿堡", "大麥克", "牛肉", "吉事", "堡"]):
+        tags.append("Deal Filter Tag > dealFilter7")
+        
+    # 規則 8：冰淇淋、冰炫風、蘋果派
+    if any(kw in t for kw in ["冰淇淋", "冰炫風", "蘋果派"]):
+        tags.append("Deal Filter Tag > dealFilter8")
+        
+    # 規則 9：咖啡、那堤、奶茶、紅茶、綠茶、可口可樂、雪碧、檸檬紅茶、飲品
+    if any(kw in t for kw in ["咖啡", "那堤", "奶茶", "紅茶", "綠茶", "可口可樂", "雪碧", "檸檬紅茶", "飲品"]):
+        tags.append("Deal Filter Tag > dealFilter9")
+
+    # 【加強防呆】如果原本 Excel 第 46 欄 (addSelection3) 本身就有手動填寫其他 tag，也把它保留並串在後面
+    orig_cleaned = str(original_tags_raw or "").strip()
+    if orig_cleaned and orig_cleaned.lower() not in ["nan", "none", "0"]:
+        # 拆分原本的 tags，避免前後有空白
+        for ot in [o.strip() for o in orig_cleaned.split(",") if o.strip()]:
+            if ot not in tags: # 避免重複加入
+                tags.append(ot)
+                
+    # 用 "," 隔開並組合成最終字串
+    return ",".join(tags)
+
 # ==========================================
 # 核心轉換邏輯 (JSON 產出)
 # ==========================================
@@ -275,9 +329,13 @@ def transform():
         out["Terms EN"] = df.iloc[:, 42].apply(clean_empty_text)
         out["Desc ZH"] = df.iloc[:, 39].apply(clean_empty_text)
         out["Terms ZH"] = df.iloc[:, 41].apply(clean_empty_text)
-        out["addSelection1"] = df.iloc[:, 44].apply(clean_empty_text)
-        out["addSelection2"] = df.iloc[:, 45].apply(clean_empty_text)
-        out["addSelection3"] = df.iloc[:, 46].apply(clean_empty_text)
+        out["addSelection1"] = df.iloc[:, 51].apply(clean_empty_text)
+        out["addSelection2"] = ""
+        # 修改後的 addSelection3 邏輯
+        out["addSelection3"] = df.apply(
+            lambda row: generate_tags(row.iloc[11], row.iloc[46]), 
+            axis=1
+        )
         out["stores"] = df.iloc[:, 47].apply(clean_empty_text)
         # 最終存到 excel/data.xlsx
         out.to_excel(os.path.join(EXCEL_DIR, 'data.xlsx'), index=False)
