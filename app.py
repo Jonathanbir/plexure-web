@@ -71,41 +71,32 @@ def generate_tags(promo_text, original_tags_raw):
     # 確保傳進來的文字是字串，並防呆
     t = str(promo_text or "").strip()
     
-    # 規則 1：麥粉
-    if "麥粉" in t:
-        tags.append("Deal Filter Tag > dealFilter1")
-        
-    # 規則 2：鑰匙圈
-    if "鑰匙圈" in t:
-        tags.append("Deal Filter Tag > dealFilter2")
-        
-    # 規則 3：手機點餐
-    if "手機點餐" in t:
-        tags.append("Deal Filter Tag > dealFilter3")
-        
-    # 規則 4：歡樂送
-    if "歡樂送" in t:
-        tags.append("Deal Filter Tag > dealFilter4")
-        
-    # 規則 5：甜心卡
-    if "甜心卡" in t:
-        tags.append("Deal Filter Tag > dealFilter5")
-        
-    # 規則 6：早餐、薯餅、鬆餅、滿福、蛋堡、焙果
-    if any(kw in t for kw in ["早餐", "薯餅", "鬆餅", "滿福", "蛋堡", "焙果"]):
-        tags.append("Deal Filter Tag > dealFilter6")
-        
-    # 規則 7：超值全餐、鷄塊、麥脆鷄、勁辣香鷄翅、勁辣鷄腿堡、大麥克、牛肉、吉事、堡
-    if any(kw in t for kw in ["超值全餐", "鷄塊", "麥脆鷄", "勁辣香鷄翅", "勁辣鷄腿堡", "大麥克", "牛肉", "吉事", "堡"]):
-        tags.append("Deal Filter Tag > dealFilter7")
-        
-    # 規則 8：冰淇淋、冰炫風、蘋果派
-    if any(kw in t for kw in ["冰淇淋", "冰炫風", "蘋果派"]):
-        tags.append("Deal Filter Tag > dealFilter8")
-        
-    # 規則 9：咖啡、那堤、奶茶、紅茶、綠茶、可口可樂、雪碧、檸檬紅茶、飲品
-    if any(kw in t for kw in ["咖啡", "那堤", "奶茶", "紅茶", "綠茶", "可口可樂", "雪碧", "檸檬紅茶", "飲品"]):
-        tags.append("Deal Filter Tag > dealFilter9")
+    # 【關鍵功能】動態讀取 JSON 設定檔
+    config_path = os.path.join(os.path.dirname(__file__), 
+        'static', 
+        'json', 
+        'keyword.json'
+        )
+
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                
+            # 自動巡航比對 JSON 裡面的所有規則
+            for item in config_data.get("keywords", []):
+                filter_name = item.get("filter")   # 例如 "dealFilter1"
+                keywords_list = item.get("values", []) # 例如 ["早餐", "薯餅", ...]
+                
+                # any() 的白話文：只要這群關鍵字裡面，有「任何一個」出現在活動名稱 t 裡面
+                if any(kw in t for kw in keywords_list):
+                    tags.append(f"Deal Filter Tag > {filter_name}")
+                    
+        except Exception as e:
+            print(f"讀取 tags_config.json 失敗: {str(e)}")
+            # 這裡可以選擇是否拋出，或留 Log 防呆
+    else:
+        print("警告：找不到 tags_config.json 檔案，將只帶入預設 Tag。")
 
     # 【加強防呆】如果原本 Excel 第 46 欄 (addSelection3) 本身就有手動填寫其他 tag，也把它保留並串在後面
     orig_cleaned = str(original_tags_raw or "").strip()
