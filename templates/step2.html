@@ -66,6 +66,27 @@
         text-decoration: underline;
       }
 
+      .link-btn-content {
+        display: flex;
+      }
+
+      .link-btn-content a {
+        color: #fff;
+        padding: 12px;
+        margin-right: 10px;
+        border-radius: 6px;
+        text-decoration: none;
+        transition: all 0.1s ease-in-out;
+      }
+
+      .link-btn-content .active {
+        background: #888;
+      }
+
+      .link-btn-content a:hover {
+        background: #888;
+      }
+
       .workspace-container {
         width: 100%;
         height: calc(100vh - 64px);
@@ -204,6 +225,10 @@
           alt="logo"
         />
       </a>
+      <div class="link-btn-content">
+        <a class="active" href="{{ url_for('step2') }}">產出自動化表單</a>
+        <a href="{{ url_for('setting') }}">內部設定</a>
+      </div>
       <div class="login-status">
         <img
           class="member-icon"
