@@ -1,10 +1,25 @@
 {
   "keywords": [
-    { "filter": "dealFilter1", "values": ["麥粉"] },
-    { "filter": "dealFilter2", "values": ["鑰匙圈"] },
-    { "filter": "dealFilter3", "values": ["手機點餐"] },
-    { "filter": "dealFilter4", "values": ["歡樂送"] },
-    { "filter": "dealFilter5", "values": ["甜心卡"] },
+    {
+      "filter": "dealFilter1",
+      "values": ["麥粉"]
+    },
+    {
+      "filter": "dealFilter2",
+      "values": ["鑰匙圈"]
+    },
+    {
+      "filter": "dealFilter3",
+      "values": ["手機點餐"]
+    },
+    {
+      "filter": "dealFilter4",
+      "values": ["歡樂送"]
+    },
+    {
+      "filter": "dealFilter5",
+      "values": ["甜心卡"]
+    },
     {
       "filter": "dealFilter6",
       "values": ["早餐", "薯餅", "鬆餅", "滿福", "蛋堡", "焙果"]
@@ -13,7 +28,10 @@
       "filter": "dealFilter7",
       "values": ["超值全餐", "大麥克", "牛肉", "鷄", "吉事", "堡"]
     },
-    { "filter": "dealFilter8", "values": ["冰淇淋", "冰炫風", "蘋果派"] },
+    {
+      "filter": "dealFilter8",
+      "values": ["冰淇淋", "冰炫風", "蘋果派", "紫薯"]
+    },
     {
       "filter": "dealFilter9",
       "values": [
@@ -25,6 +43,7 @@
         "可口可樂",
         "雪碧",
         "檸檬紅茶",
+        "奶昔",
         "飲品",
         "飲料"
       ]

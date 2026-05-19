@@ -93,10 +93,10 @@ def generate_tags(promo_text, original_tags_raw):
                     tags.append(f"Deal Filter Tag > {filter_name}")
                     
         except Exception as e:
-            print(f"讀取 tags_config.json 失敗: {str(e)}")
+            print(f"讀取 keyword.json 失敗: {str(e)}")
             # 這裡可以選擇是否拋出，或留 Log 防呆
     else:
-        print("警告：找不到 tags_config.json 檔案，將只帶入預設 Tag。")
+        print("警告：找不到 keyword.json 檔案，將只帶入預設 Tag。")
 
     # 【加強防呆】如果原本 Excel 第 46 欄 (addSelection3) 本身就有手動填寫其他 tag，也把它保留並串在後面
     orig_cleaned = str(original_tags_raw or "").strip()
@@ -339,6 +339,71 @@ def step2():
     if not session.get('logged_in'): return redirect(url_for('index'))
     models = [file for file in os.listdir(EXCEL_DIR) if file.endswith('.xlsm')]
     return render_template('step2.html', models=models)
+
+
+@app.route('/setting')
+def setting():
+    if not session.get('logged_in'): 
+        return redirect(url_for('index'))
+        
+    # 讀取現有的 JSON 設定，以便在網頁預填
+    config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'keyword.json')
+    
+    # 預設 1~9 的空結構，防呆用
+    display_data = {f"dealFilter{i}": "" for i in range(1, 10)}
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                for item in config_data.get("keywords", []):
+                    filter_name = item.get("filter")
+                    values_list = item.get("values", [])
+                    # 將陣列轉為用逗號隔開的字串，方便使用者在 input 欄位閱讀與編輯
+                    display_data[filter_name] = ",".join(values_list)
+        except Exception as e:
+            print(f"讀取 JSON 失敗: {e}")
+            
+    return render_template('setting.html', data=display_data)
+
+@app.route('/save_setting', methods=['POST'])
+def save_setting():
+    if not session.get('logged_in'): 
+        return jsonify({"status": "error", "message": "未登入"}), 403
+        
+    try:
+        req_data = request.json  # 接收前端傳來的 JSON 物件
+        
+        # 重新組合成標準的 JSON 儲存格式
+        new_keywords = []
+        for i in range(1, 10):
+            filter_name = f"dealFilter{i}"
+            # 取得前端傳來的字串 (例如: "咖啡,那堤,奶茶")
+            raw_value = req_data.get(filter_name, "")
+            
+            # 去除前後空白，並依照「中文逗號」或「英文逗號」做拆分
+            # 這樣使用者輸入 "咖啡，那堤" 或 "咖啡,那堤" 都能相通！
+            split_values = re.split(r'[,\uff0c]', raw_value)
+            
+            # 過濾掉空白的項目
+            clean_values = [v.strip() for v in split_values if v.strip()]
+            
+            new_keywords.append({
+                "filter": filter_name,
+                "values": clean_values
+            })
+            
+        final_config = {"keywords": new_keywords}
+        
+        # 寫入檔案
+        config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'keyword.json')
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(final_config, f, ensure_ascii=False, indent=2)
+            
+        return jsonify({"status": "success", "message": "設定已成功儲存！"})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/generate_result', methods=['POST'])
 def generate_result():

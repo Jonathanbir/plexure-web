@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plexure &ndash; Automation Bot (設定)</title>
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='images/favicon.ico') }}"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+        font-family: "Microsoft JhengHei", sans-serif;
+        background-color: #f4f4f4;
+      }
+
+      .navigation-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        height: 64px;
+        background-color: #333333 !important;
+      }
+
+      .new-logo {
+        padding: 0 15px !important;
+        display: flex !important;
+        height: 100%;
+      }
+
+      .login-status {
+        display: flex;
+        align-items: center;
+      }
+
+      .member-icon {
+        width: 40px;
+      }
+
+      .logout-btn {
+        padding: 5px 12px;
+        font-size: 16px;
+        cursor: pointer;
+        color: #ffffff;
+        text-decoration: none;
+        transition: all 0.5s ease-in-out;
+      }
+
+      .logout-btn:hover {
+        text-decoration: underline;
+      }
+
+      .link-btn-content {
+        display: flex;
+      }
+
+      .link-btn-content a {
+        color: #fff;
+        padding: 12px;
+        margin-right: 10px;
+        border-radius: 6px;
+        text-decoration: none;
+        transition: all 0.1s ease-in-out;
+      }
+
+      .link-btn-content .active {
+        background: #888;
+      }
+
+      .link-btn-content a:hover {
+        background: #888;
+      }
+
+      /* 延用 Workspace 結構 */
+      .workspace-container {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 40px 20px;
+        min-height: calc(100vh - 144px);
+      }
+      .workspace {
+        background: #ffffff;
+        width: 100%;
+        max-width: 700px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        padding: 40px;
+        box-sizing: border-box;
+      }
+      h2 {
+        margin-top: 0;
+        color: #333333;
+        border-left: 5px solid #ff6600;
+        padding-left: 10px;
+        margin-bottom: 10px;
+      }
+      .subtitle {
+        color: #666666;
+        font-size: 14px;
+        margin-bottom: 30px;
+      }
+
+      /* 表單與九宮格樣式 */
+      .form-group {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .form-group label {
+        width: 120px;
+        font-weight: bold;
+        color: #444444;
+        font-size: 15px;
+      }
+      .form-group input {
+        flex: 1;
+        border: 1px solid #cccccc;
+        border-radius: 5px;
+        padding: 12px;
+        font-size: 15px;
+        box-sizing: border-box;
+        transition: border 0.3s;
+      }
+      .form-group input:focus {
+        border-color: #ff6600;
+        outline: none;
+        box-shadow: 0 0 5px rgba(255, 102, 0, 0.2);
+      }
+
+      /* 按紐置中 */
+      .btn-center-region {
+        display: flex;
+        justify-content: center;
+        margin-top: 35px;
+      }
+      .save-btn {
+        background-color: #ff6600;
+        color: white;
+        border: none;
+        padding: 12px 50px;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+      .save-btn:hover {
+        background-color: #e05500;
+      }
+      .save-btn:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      #statusMsg {
+        text-align: center;
+        margin-top: 15px;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      .status-success {
+        color: green;
+      }
+      .status-error {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="pitch minWidth navigation-bar" style="padding-left: 0">
+      <a class="new-logo" href="{{ url_for('index') }}">
+        <img
+          class="new-logo__image"
+          src="{{ url_for('static', filename='images/logo.png') }}"
+          alt="logo"
+        />
+      </a>
+      <div class="link-btn-content">
+        <a href="{{ url_for('index') }}">產出自動化表單</a>
+        <a class="active" href="{{ url_for('setting') }}">內部設定</a>
+      </div>
+      <div class="login-status">
+        <img
+          class="member-icon"
+          src="{{ url_for('static', filename='images/member.png') }}"
+          alt="member"
+        />
+        <a class="logout-btn" href="/logout">登出</a>
+      </div>
+    </header>
+    <div class="workspace-container">
+      <div class="workspace">
+        <h2>自動標籤關鍵字設定</h2>
+        <div class="subtitle">
+          請輸入各分類的觸發關鍵字，多個關鍵字請用逗號「,」隔開。
+        </div>
+
+        <form id="settingForm">
+          {% for i in range(1, 10) %} {% set filter_id = "dealFilter" ~ i %}
+          <div class="form-group">
+            <label for="{{ filter_id }}">dealFilter{{ i }}：</label>
+            <input
+              type="text"
+              id="{{ filter_id }}"
+              name="{{ filter_id }}"
+              value="{{ data[filter_id] }}"
+              placeholder="例如：麥粉, 鑰匙圈"
+            />
+          </div>
+          {% endfor %}
+
+          <div class="btn-center-region">
+            <button type="button" id="submitBtn" class="save-btn">
+              儲存設定
+            </button>
+          </div>
+        </form>
+
+        <div id="statusMsg"></div>
+      </div>
+    </div>
+
+    <script>
+      $(document).ready(function () {
+        $("#submitBtn").click(function () {
+          var btn = $(this);
+          var msgEl = $("#statusMsg");
+
+          // 1. 收集 9 個欄位的資料
+          var payload = {};
+          for (var i = 1; i <= 9; i++) {
+            var fieldId = "dealFilter" + i;
+            payload[fieldId] = $("#" + fieldId).val();
+          }
+
+          // 2. 變更按鈕樣式
+          btn.prop("disabled", true).text("正在儲存...");
+          msgEl.removeClass("status-success status-error").text("");
+
+          // 3. 發送 AJAX POST 請求
+          $.ajax({
+            url: "/save_setting",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(payload),
+            success: function (res) {
+              btn.prop("disabled", false).text("儲存設定");
+              if (res.status === "success") {
+                msgEl.addClass("status-success").text(res.message);
+                // 2秒後自動消失提示
+                setTimeout(function () {
+                  msgEl.text("");
+                }, 3000);
+              } else {
+                msgEl.addClass("status-error").text("失敗：" + res.message);
+              }
+            },
+            error: function (xhr) {
+              btn.prop("disabled", false).text("儲存設定");
+              msgEl.addClass("status-error").text("伺服器連線錯誤，儲存失敗。");
+            },
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
