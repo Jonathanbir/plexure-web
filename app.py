@@ -465,39 +465,39 @@ DEFAULT_CONFIG = {
     "templates": [
         {
             "id": "tpl1",
-            "regex": "單點.*(?:打?\\d+折|折.*%)",
-            "exclude_regex": "",
-            "value": "MPA TW Discount Off Product(Percentage) Pre tax False"
-        },
-        {
-            "id": "tpl2",
-            "regex": "單點.*折.*\\d+|買.*現折|單點.*特價",
-            "exclude_regex": "",
-            "value": "MPA TW Discount Off Product($Amount) Pre tax False"
-        },
-        {
-            "id": "tpl3",
             "regex": "買一送一|買.*送|單點.*送|單筆.*滿.*送",
             "exclude_regex": "加(?:\\$|\\d+元).*送",
             "value": "TW Buy One Get One Or Another Discounted(Percentage)"
         },
         {
-        "id": "tpl4",
-        "regex": "單點.*加(?:\\$|\\d+元).*送",
-        "exclude_regex": "",
-        "value": "TW Buy One Get One Or Another Discounted($Amount)"
+            "id": "tpl2",
+            "regex": "單點.*加(?:\\$|\\d+元).*送",
+            "exclude_regex": "",
+            "value": "TW Buy One Get One Or Another Discounted($Amount)"
         },
         {
-        "id": "tpl5",
-        "regex": "單筆.*滿.*折",
-        "exclude_regex": "",
-        "value": "MPA TW Discount Off Total Order(Percentage) Pre Tax False"
+            "id": "tpl3",
+            "regex": "單點.*(?:打?\\d+折|折.*%)",
+            "exclude_regex": "",
+            "value": "MPA TW Discount Off Product(Percentage) Pre tax False"
         },
         {
-        "id": "tpl6",
-        "regex": "單筆.*滿.*現折.*\\$",
-        "exclude_regex": "",
-        "value": "MPA TW Discount Off Total Order($Amount) Pre tax False"
+            "id": "tpl4",
+            "regex": "單點.*現折.*\\$|買.*現折.*\\$|單點.*特價",
+            "exclude_regex": "",
+            "value": "MPA TW Discount Off Product($Amount) Pre tax False"
+        },
+        {
+            "id": "tpl5",
+            "regex": "單筆.*滿.*\\d+折",
+            "exclude_regex": "現折",
+            "value": "MPA TW Discount Off Total Order(Percentage) Pre Tax False"
+        },
+        {
+            "id": "tpl6",
+            "regex": "單筆.*滿.*現折.*\\$",
+            "exclude_regex": "\\d+折",
+            "value": "MPA TW Discount Off Total Order($Amount) Pre tax False"
         }
     ]
 }
