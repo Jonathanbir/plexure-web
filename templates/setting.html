@@ -238,8 +238,8 @@
         transform: translate(-50%, -50%);
         width: 250px;
         height: 150px;
-        background: #c9f4a1; /* 你指定的背景色 */
-        color: #408400; /* 你指定的文字顏色 */
+        background: #c9f4a1;
+        color: #408400;
         border-radius: 8px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
         display: flex;
@@ -277,6 +277,100 @@
         font-size: 16px;
         font-weight: 900;
         text-align: center;
+      }
+
+      .reset-btn {
+        background-color: #888888;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        font-size: 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+        transition: all 0.1s ease-in-out;
+      }
+
+      .reset-btn:hover {
+        background-color: #333333;
+      }
+
+      /* 還原確認彈窗專屬外殼調整 (比成功彈窗稍微加大，以容納按鈕與長文字) */
+      .confirm-modal-box {
+        width: 320px !important;
+        height: auto !important;
+        min-height: 180px;
+        background: #cccccc;
+        color: #333333;
+        padding: 20px !important;
+        border: 1px solid #aaaaaa;
+      }
+
+      /* 驚嘆號外框圓圈 */
+      .confirm-icon-wrapper {
+        background: #ffffff;
+        width: 45px;
+        height: 45px;
+        border-radius: 100%;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      }
+
+      /* 驚嘆號 SVG 本體 */
+      .confirm-icon {
+        width: 30px;
+        height: 30px;
+        fill: #ff6600;
+      }
+
+      /* 提示內文排版 */
+      .confirm-text {
+        font-size: 14px;
+        font-weight: bold;
+        text-align: center;
+        line-height: 1.5;
+        margin-bottom: 15px;
+      }
+
+      /* 彈窗按鈕群組排版 */
+      .confirm-btn-group {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        width: 100%;
+      }
+
+      /* 按鈕共用樣式 */
+      .confirm-btn {
+        padding: 8px 18px;
+        font-size: 14px;
+        font-weight: bold;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      /* 取消按鈕 (灰色) */
+      .btn-cancel {
+        background-color: #e2e3e5;
+        color: #383d41;
+      }
+      .btn-cancel:hover {
+        background-color: #d6d8db;
+      }
+
+      /* 確認還原按鈕 (深紅色/深橘色，強調警告感) */
+      .btn-reset {
+        background-color: #ff6600;
+        color: white;
+        transition: all 0.1s ease-in-out;
+      }
+      .btn-reset:hover {
+        background-color: #e05500;
       }
     </style>
   </head>
@@ -326,14 +420,15 @@
             />
           </div>
           {% endfor %}
-
           <div class="btn-center-region">
-            <button type="button" id="submitBtn" class="save-btn">
+            <button id="resetKeywordsBtn" class="reset-btn" type="button">
+              還原預設值
+            </button>
+            <button id="submitBtn" class="save-btn" type="button">
               儲存設定
             </button>
           </div>
         </form>
-
         <div id="statusMsg"></div>
       </div>
     </div>
@@ -375,7 +470,10 @@
         </table>
 
         <div class="btn-center-region">
-          <button type="button" id="saveBtn" class="save-btn">儲存設定</button>
+          <button id="resetTemplatesBtn" class="reset-btn" type="button">
+            還原預設值
+          </button>
+          <button id="saveBtn" class="save-btn" type="button">儲存設定</button>
         </div>
       </div>
     </div>
@@ -391,6 +489,38 @@
           </svg>
         </div>
         <div class="success-text">成功儲存！</div>
+      </div>
+    </div>
+    <div id="customConfirmModal" class="custom-modal">
+      <div class="custom-modal-content confirm-modal-box">
+        <div class="confirm-icon-wrapper">
+          <svg
+            class="confirm-icon"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+            />
+          </svg>
+        </div>
+        <div id="confirmModalText" class="confirm-text">提示文字預填處</div>
+        <div class="confirm-btn-group">
+          <button
+            type="button"
+            class="confirm-btn btn-cancel"
+            id="confirmCancelBtn"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="confirm-btn btn-reset"
+            id="confirmExecuteBtn"
+          >
+            確認還原
+          </button>
+        </div>
       </div>
     </div>
     <script>
@@ -489,6 +619,76 @@
           error: function () {
             alert("連線失敗");
             btn.prop("disabled", false).text("儲存設定");
+          },
+        });
+      });
+    </script>
+    <script>
+      // 宣告一個全域暫存變數，用來記錄當下點擊還原的是 "keywords" 還是 "templates"
+      var currentResetTarget = "";
+
+      // 點擊「關鍵字」還原預設值
+      $("#resetKeywordsBtn").click(function () {
+        currentResetTarget = "keywords";
+        $("#confirmModalText").text(
+          "您確定要將「關鍵字篩選」還原為系統預設值嗎？這將會覆蓋目前的設定。",
+        );
+        $("#customConfirmModal").fadeIn(200); // 彈窗淡入
+      });
+
+      // 點擊「樣板規則」還原預設值
+      $("#resetTemplatesBtn").click(function () {
+        currentResetTarget = "templates";
+        $("#confirmModalText").text(
+          "您確定要將「樣板判斷規則」還原為系統預設值嗎？這將會覆蓋目前的設定。",
+        );
+        $("#customConfirmModal").fadeIn(200); // 彈窗淡入
+      });
+
+      // 點擊彈窗內的【取消】按鈕
+      $("#confirmCancelBtn").click(function () {
+        $("#customConfirmModal").fadeOut(200); // 彈窗關閉
+        currentResetTarget = ""; // 清空標記
+      });
+
+      // 點擊彈窗內的【確認還原】按鈕（執行實際的 AJAX 請求）
+      $("#confirmExecuteBtn").click(function () {
+        if (!currentResetTarget) return;
+
+        var btn = $(this);
+        var originalText = btn.text();
+
+        // 變更按鈕鎖定狀態，防止重複點擊
+        btn.prop("disabled", true).text("處理中...");
+        $("#confirmCancelBtn").prop("disabled", true);
+
+        $.ajax({
+          url: "/reset_setting",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ target: currentResetTarget }),
+          success: function (res) {
+            // 恢復按鈕狀態
+            btn.prop("disabled", false).text(originalText);
+            $("#confirmCancelBtn").prop("disabled", false);
+            $("#customConfirmModal").hide(); // 直接關閉確認彈窗
+
+            if (res.status === "success") {
+              // 調用原本設計好的儲存成功綠色打勾彈窗
+              $("#successModal").fadeIn(200);
+
+              // 1.5 秒後重新整理網頁，呈現還原後的初始資料
+              setTimeout(function () {
+                window.location.reload();
+              }, 1500);
+            } else {
+              alert("失敗：" + res.message);
+            }
+          },
+          error: function () {
+            alert("網路或伺服器連線錯誤，還原失敗。");
+            btn.prop("disabled", false).text(originalText);
+            $("#confirmCancelBtn").prop("disabled", false);
           },
         });
       });

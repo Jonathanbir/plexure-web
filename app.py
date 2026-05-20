@@ -448,6 +448,90 @@ def save_template_setting():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
+    
+# 定義系統內建的預設值配置 (對應您原始的預設需求)
+DEFAULT_CONFIG = {
+    "keywords": [
+        {"filter": "dealFilter1", "values": ["麥粉"]},
+        {"filter": "dealFilter2", "values": ["鑰匙圈"]},
+        {"filter": "dealFilter3", "values": ["手機點餐"]},
+        {"filter": "dealFilter4", "values": ["歡樂送"]},
+        {"filter": "dealFilter5", "values": ["甜心卡"]},
+        {"filter": "dealFilter6", "values": ["早餐", "薯餅", "鬆餅", "滿福", "蛋堡", "焙果"]},
+        {"filter": "dealFilter7", "values": ["超值全餐", "大麥克", "牛肉", "鷄", "吉事", "堡"]},
+        {"filter": "dealFilter8", "values": ["冰淇淋", "冰炫風", "蘋果派", "紫薯", "聖代"]},
+        {"filter": "dealFilter9", "values": ["咖啡", "那堤", "奶茶", "紅茶", "綠茶", "可口可樂", "雪碧", "檸檬紅茶", "奶昔", "冰", "飲品", "飲料"]}
+    ],
+    "templates": [
+        {
+            "id": "tpl1",
+            "regex": "單點.*(?:打?\\d+折|折.*%)",
+            "exclude_regex": "",
+            "value": "MPA TW Discount Off Product(Percentage) Pre tax False"
+        },
+        {
+            "id": "tpl2",
+            "regex": "單點.*折.*\\d+|買.*現折|單點.*特價",
+            "exclude_regex": "",
+            "value": "MPA TW Discount Off Product($Amount) Pre tax False"
+        },
+        {
+            "id": "tpl3",
+            "regex": "買一送一|買.*送|單點.*送|單筆.*滿.*送",
+            "exclude_regex": "加(?:\\$|\\d+元).*送",
+            "value": "TW Buy One Get One Or Another Discounted(Percentage)"
+        },
+        {
+        "id": "tpl4",
+        "regex": "單點.*加(?:\\$|\\d+元).*送",
+        "exclude_regex": "",
+        "value": "TW Buy One Get One Or Another Discounted($Amount)"
+        },
+        {
+        "id": "tpl5",
+        "regex": "單筆.*滿.*折",
+        "exclude_regex": "",
+        "value": "MPA TW Discount Off Total Order(Percentage) Pre Tax False"
+        },
+        {
+        "id": "tpl6",
+        "regex": "單筆.*滿.*現折.*\\$",
+        "exclude_regex": "",
+        "value": "MPA TW Discount Off Total Order($Amount) Pre tax False"
+        }
+    ]
+}
+
+@app.route('/reset_setting', methods=['POST'])
+def reset_setting():
+    if not session.get('logged_in'): 
+        return jsonify({"status": "error", "message": "未登入"}), 403
+    try:
+        req_data = request.json
+        target = req_data.get("target") # 取出要重置的是 'keywords' 還是 'templates'
+        
+        if target not in ["keywords", "templates"]:
+            return jsonify({"status": "error", "message": "無效的重置目標"}), 400
+            
+        config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'setting.json')
+        
+        # 讀取現有配置，避免另一邊被洗掉
+        current_config = {"keywords": [], "templates": []}
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current_config = json.load(f)
+                
+        # 根據前端指定的目標，將該區塊覆寫為預設值
+        current_config[target] = DEFAULT_CONFIG[target]
+        
+        # 寫回設定檔
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(current_config, f, ensure_ascii=False, indent=2)
+            
+        return jsonify({"status": "success", "message": f"已成功還原預設值！"})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/generate_result', methods=['POST'])
 def generate_result():
