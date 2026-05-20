@@ -18,6 +18,22 @@
         background-color: #f4f4f4;
       }
 
+      p {
+        font-size: 16px;
+        margin-top: 0;
+        text-align: left;
+        color: #888888;
+      }
+
+      .login-witherror {
+        background-color: rgba(230, 0, 0, 0.2);
+        background-image: url(/static/images/error-icon.svg);
+        background-position: 5px;
+        background-repeat: no-repeat;
+        padding-left: 25px;
+        white-space: nowrap;
+      }
+
       .navigation-bar {
         display: flex;
         justify-content: space-between;
@@ -435,11 +451,11 @@
     <div class="workspace-container" id="templates-container">
       <div class="workspace">
         <h2>Extended Data Templates名稱規則</h2>
+        <p class="login-message" id="RequestUserPass-Message"></p>
         <div style="color: #666; font-size: 14px; margin-bottom: 20px">
           此處為高級正則表達式設定，修改前請確保 Regex
           語法正確（由上至下依序權重比對）。
         </div>
-
         <table>
           <thead>
             <tr>
@@ -455,7 +471,13 @@
                 <input type="text" class="tpl-value" value="{{ tpl.value }}" />
               </td>
               <td>
-                <input type="text" class="tpl-regex" value="{{ tpl.regex }}" />
+                <input
+                  type="text"
+                  class="tpl-regex"
+                  value="{{ tpl.regex }}"
+                  required
+                  placeholder="ex:單點.*折"
+                />
               </td>
               <td>
                 <input
@@ -524,7 +546,23 @@
       </div>
     </div>
     <script>
+      // 當使用者在紅框內輸入任何字時，立刻自動把紅框移除
+      $(document).on("input", ".tpl-regex", function () {
+        const msgEl = document.getElementById("RequestUserPass-Message");
+        console.log("$(this).val().trim() :", $(this).val().trim());
+        if ($(this).val().trim() === "") {
+          $(this).css("border", "2px solid #fa4616");
+          msgEl.innerText = "請填觸發條件";
+          msgEl.classList.add("login-witherror");
+        } else {
+          $(this).css("border-color", "#cccccc");
+          msgEl.innerText = "";
+          msgEl.classList.remove("login-witherror");
+        }
+      });
+
       $(document).ready(function () {
+        const msgEl = document.getElementById("RequestUserPass-Message");
         // --- 1. Tab 分頁切換點擊事件邏輯 ---
         $("#keywords").click(function () {
           $(".tab-item").removeClass("active");
@@ -587,17 +625,34 @@
       $("#saveBtn").click(function () {
         var btn = $(this);
         var payload = [];
+        var isFormValid = true;
 
         // 遍歷表格每一列抓取資料
         $(".rule-row").each(function () {
+          var regexInput = $(this).find(".tpl-regex");
+          var regexVal = regexInput.val().trim();
+          // 【防呆檢查】如果正則表達式為空
+          if (regexVal === "") {
+            regexInput.css("border-color", "#dc3545"); // 讓空的輸入框直接變紅框
+            isFormValid = false;
+          } else {
+            regexInput.css("border-color", "#cccccc"); // 有填寫就恢復正常顏色
+          }
+
           payload.push({
             id: $(this).data("id"),
-            regex: $(this).find(".tpl-regex").val().trim(),
+            regex: regexVal,
             exclude_regex: $(this).find(".tpl-exclude").val().trim(),
             value: $(this).find(".tpl-value").val().trim(),
           });
         });
 
+        // 如果檢查沒通過，攔截傳送並跳出提示
+        if (!isFormValid) {
+          return;
+        }
+
+        // --- 通過必填檢查，開始發送 AJAX ---
         btn.prop("disabled", true).text("儲存中...");
 
         $.ajax({
