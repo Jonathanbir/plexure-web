@@ -50,64 +50,54 @@ def split_time(text):
         return parts[0].strip(), (parts[1].strip() if len(parts) > 1 else "Nan")
     return text, "Nan"
 
-def get_extended_template(text):
-    if pd.isna(text): return ""
-    t = str(text)
-    if re.search(r"單點.*(?:打?\d+折|折.*%)", t):return "MPA TW Discount Off Product(Percentage) Pre tax False"
-    if re.search(r"單點.*折.*\d+|買.*現折|單點.*特價", t): return "MPA TW Discount Off Product($Amount) Pre tax False"
-    if re.search(r"買一送一|買.*送|單點.*送|單筆.*滿.*送", t): 
-        # 排除加錢送的狀況（交給下面處理）
-        if not re.search(r"加(?:\$|\d+元).*送", t):
-            return "TW Buy One Get One Or Another Discounted(Percentage)"
-    if re.search(r"單點.*加(?:\$|\d+元).*送", t): return  "TW Buy One Get One Or Another Discounted($Amount)"
-    if re.search(r"單筆.*滿.*折", t): return "MPA TW Discount Off Total Order(Percentage) Pre Tax False"
-    if re.search(r"單筆.*滿.*現折.*\$", t): return "MPA TW Discount Off Total Order($Amount) Pre tax False"
-    return ""
-
 def generate_tags(promo_text, original_tags_raw):
-    # 預設一定會有的必帶字串
     tags = ["Claim Type > Scan And Go QR"]
-    
-    # 確保傳進來的文字是字串，並防呆
     t = str(promo_text or "").strip()
     
-    # 【關鍵功能】動態讀取 JSON 設定檔
-    config_path = os.path.join(os.path.dirname(__file__), 
-        'static', 
-        'json', 
-        'keyword.json'
-        )
-
+    # 指向修正後的 setting.json
+    config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'setting.json')
     if os.path.exists(config_path):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
-                
-            # 自動巡航比對 JSON 裡面的所有規則
             for item in config_data.get("keywords", []):
-                filter_name = item.get("filter")   # 例如 "dealFilter1"
-                keywords_list = item.get("values", []) # 例如 ["早餐", "薯餅", ...]
-                
-                # any() 的白話文：只要這群關鍵字裡面，有「任何一個」出現在活動名稱 t 裡面
+                filter_name = item.get("filter")
+                keywords_list = item.get("values", [])
                 if any(kw in t for kw in keywords_list):
                     tags.append(f"Deal Filter Tag > {filter_name}")
-                    
         except Exception as e:
-            print(f"讀取 keyword.json 失敗: {str(e)}")
-            # 這裡可以選擇是否拋出，或留 Log 防呆
-    else:
-        print("警告：找不到 keyword.json 檔案，將只帶入預設 Tag。")
+            print(f"generate_tags 讀取 setting.json 失敗: {e}")
 
-    # 【加強防呆】如果原本 Excel 第 46 欄 (addSelection3) 本身就有手動填寫其他 tag，也把它保留並串在後面
     orig_cleaned = str(original_tags_raw or "").strip()
     if orig_cleaned and orig_cleaned.lower() not in ["nan", "none", "0"]:
-        # 拆分原本的 tags，避免前後有空白
         for ot in [o.strip() for o in orig_cleaned.split(",") if o.strip()]:
-            if ot not in tags: # 避免重複加入
+            if ot not in tags:
                 tags.append(ot)
-                
-    # 用 "," 隔開並組合成最終字串
     return ",".join(tags)
+
+
+def get_extended_template(text):
+    if pd.isna(text): return ""
+    t = str(text).strip()
+    
+    # 指向修正後的 setting.json
+    config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'setting.json')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            for item in config_data.get("templates", []):
+                regex_str = item.get("regex", "")
+                exclude_str = item.get("exclude_regex", "")
+                template_value = item.get("value", "")
+                
+                if regex_str and re.search(regex_str, t):
+                    if exclude_str and re.search(exclude_str, t):
+                        continue
+                    return template_value
+        except Exception as e:
+            print(f"get_extended_template 讀取 setting.json 失敗: {e}")
+    return ""
 
 # ==========================================
 # 核心轉換邏輯 (JSON 產出)
@@ -346,61 +336,115 @@ def setting():
     if not session.get('logged_in'): 
         return redirect(url_for('index'))
         
-    # 讀取現有的 JSON 設定，以便在網頁預填
-    config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'keyword.json')
+    json_dir = os.path.join(os.path.dirname(__file__), 'static', 'json')
+    if not os.path.exists(json_dir):
+        os.makedirs(json_dir)
+        
+    # 【修正】精準對應你目前的單一設定檔：setting.json
+    config_path = os.path.join(json_dir, 'setting.json')
     
-    # 預設 1~9 的空結構，防呆用
-    display_data = {f"dealFilter{i}": "" for i in range(1, 10)}
+    # 預設結構：如果檔案完全不存在時自動產生的防呆初始資料
+    default_config = {
+        "keywords": [
+            { "filter": f"dealFilter{i}", "values": [] } for i in range(1, 10)
+        ],
+        "templates": [
+            { "id": "tpl1", "value": "MPA TW Discount Off Product(Percentage) Pre tax False", "regex": "單點.*(?:打?\\d+折|折.*%)", "exclude_regex": "" },
+            { "id": "tpl2", "value": "MPA TW Discount Off Product($Amount) Pre tax False", "regex": "單點.*折.*\\d+|買.*現折|單點.*特價", "exclude_regex": "" },
+            { "id": "tpl3", "value": "TW Buy One Get One Or Another Discounted(Percentage)", "regex": "買一送一|買.*送|單點.*送|單筆.*滿.*送", "exclude_regex": "加(?:\\$|\\d+元).*送" },
+            { "id": "tpl4", "value": "TW Buy One Get One Or Another Discounted($Amount)", "regex": "單點.*加(?:\\$|\\d+元).*送", "exclude_regex": "" },
+            { "id": "tpl5", "value": "MPA TW Discount Off Total Order(Percentage) Pre Tax False", "regex": "單筆.*滿.*折", "exclude_regex": "" },
+            { "id": "tpl6", "value": "MPA TW Discount Off Total Order($Amount) Pre tax False", "regex": "單筆.*滿.*現折.*\\$", "exclude_regex": "" }
+        ]
+    }
+
+    config_data = default_config
     
+    # 如果 setting.json 存在就讀取，不存在就自動寫入預設結構
     if os.path.exists(config_path):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
-                for item in config_data.get("keywords", []):
-                    filter_name = item.get("filter")
-                    values_list = item.get("values", [])
-                    # 將陣列轉為用逗號隔開的字串，方便使用者在 input 欄位閱讀與編輯
-                    display_data[filter_name] = ",".join(values_list)
         except Exception as e:
-            print(f"讀取 JSON 失敗: {e}")
+            print(f"讀取 setting.json 失敗，將採用預設結構: {e}")
+    else:
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(default_config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"自動建立 setting.json 失敗: {e}")
+
+    # 【核心修正】建立符合前端 setting.html 命名規範的變數 'data'
+    data = {f"dealFilter{i}": "" for i in range(1, 10)}
+    for item in config_data.get("keywords", []):
+        filter_name = item.get("filter")
+        values_list = item.get("values", [])
+        data[filter_name] = ",".join(values_list)
+
+    # 取得樣板規則列表
+    templates = config_data.get("templates", [])
             
-    return render_template('setting.html', data=display_data)
+    # 【核心修正】將 kw_data 改回 data 傳入前端，完美解決 jinja2 報錯
+    return render_template('setting.html', data=data, templates=templates)
+
 
 @app.route('/save_setting', methods=['POST'])
 def save_setting():
     if not session.get('logged_in'): 
         return jsonify({"status": "error", "message": "未登入"}), 403
-        
     try:
-        req_data = request.json  # 接收前端傳來的 JSON 物件
+        req_data = request.json
+        config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'setting.json')
         
-        # 重新組合成標準的 JSON 儲存格式
+        # 先讀出目前完整的 config 物件，確保另一邊的 templates 區塊不會被洗掉
+        current_config = {"keywords": [], "templates": []}
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current_config = json.load(f)
+                
+        # 更新 keywords 區塊
         new_keywords = []
         for i in range(1, 10):
             filter_name = f"dealFilter{i}"
-            # 取得前端傳來的字串 (例如: "咖啡,那堤,奶茶")
             raw_value = req_data.get(filter_name, "")
-            
-            # 去除前後空白，並依照「中文逗號」或「英文逗號」做拆分
-            # 這樣使用者輸入 "咖啡，那堤" 或 "咖啡,那堤" 都能相通！
             split_values = re.split(r'[,\uff0c]', raw_value)
-            
-            # 過濾掉空白的項目
             clean_values = [v.strip() for v in split_values if v.strip()]
+            new_keywords.append({"filter": filter_name, "values": clean_values})
             
-            new_keywords.append({
-                "filter": filter_name,
-                "values": clean_values
-            })
-            
-        final_config = {"keywords": new_keywords}
+        current_config["keywords"] = new_keywords
         
-        # 寫入檔案
-        config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'keyword.json')
+        # 寫回設定檔
         with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(final_config, f, ensure_ascii=False, indent=2)
+            json.dump(current_config, f, ensure_ascii=False, indent=2)
             
-        return jsonify({"status": "success", "message": "設定已成功儲存！"})
+        return jsonify({"status": "success", "message": "關鍵字已成功儲存！"})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/save_template_setting', methods=['POST'])
+def save_template_setting():
+    if not session.get('logged_in'): 
+        return jsonify({"status": "error", "message": "未登入"}), 403
+    try:
+        req_data = request.json  # 前端傳過來的新 templates 陣列
+        config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'setting.json')
+        
+        # 先讀出目前完整的 config 物件，確保另一邊的 keywords 區塊不會被洗掉
+        current_config = {"keywords": [], "templates": []}
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current_config = json.load(f)
+                
+        # 更新 templates 區塊
+        current_config["templates"] = req_data
+        
+        # 寫回設定檔
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(current_config, f, ensure_ascii=False, indent=2)
+            
+        return jsonify({"status": "success", "message": "樣板規則已成功儲存！"})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500

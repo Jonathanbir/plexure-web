@@ -76,23 +76,54 @@
         background: #888;
       }
 
+      .tab-content {
+        display: flex;
+        justify-content: center;
+        margin-top: 50px;
+      }
+
+      .tab-item {
+        padding: 12px;
+        border-radius: 6px 6px 0 0;
+        color: #333333;
+        background-color: #ffffff;
+        cursor: pointer;
+        transition: all 0.1s ease-in-out;
+      }
+
+      .tab-item:hover {
+        background-color: #888888;
+        color: #ffffff;
+      }
+
+      .tab-content .active {
+        background-color: #333333;
+        color: #ffffff;
+      }
+
+      #templates-container {
+        display: none;
+      }
+
       /* 延用 Workspace 結構 */
       .workspace-container {
         display: flex;
         justify-content: center;
         align-items: flex-start;
-        padding: 40px 20px;
+        padding: 0 20px 40px;
         min-height: calc(100vh - 144px);
       }
+
       .workspace {
         background: #ffffff;
         width: 100%;
-        max-width: 700px;
+        max-width: 1200px;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         padding: 40px;
         box-sizing: border-box;
       }
+
       h2 {
         margin-top: 0;
         color: #333333;
@@ -100,6 +131,7 @@
         padding-left: 10px;
         margin-bottom: 10px;
       }
+
       .subtitle {
         color: #666666;
         font-size: 14px;
@@ -118,7 +150,9 @@
         color: #444444;
         font-size: 15px;
       }
-      .form-group input {
+
+      input {
+        width: 100%;
         flex: 1;
         border: 1px solid #cccccc;
         border-radius: 5px;
@@ -127,10 +161,19 @@
         box-sizing: border-box;
         transition: border 0.3s;
       }
+
       .form-group input:focus {
         border-color: #ff6600;
         outline: none;
         box-shadow: 0 0 5px rgba(255, 102, 0, 0.2);
+      }
+
+      table {
+        width: 100%;
+      }
+
+      tr {
+        text-align: left;
       }
 
       /* 按紐置中 */
@@ -139,6 +182,7 @@
         justify-content: center;
         margin-top: 35px;
       }
+
       .save-btn {
         background-color: #ff6600;
         color: white;
@@ -150,9 +194,11 @@
         cursor: pointer;
         transition: background 0.3s;
       }
+
       .save-btn:hover {
         background-color: #e05500;
       }
+
       .save-btn:disabled {
         background-color: #cccccc;
         cursor: not-allowed;
@@ -192,7 +238,7 @@
         transform: translate(-50%, -50%);
         width: 250px;
         height: 150px;
-        background: #b5f17c; /* 你指定的背景色 */
+        background: #c9f4a1; /* 你指定的背景色 */
         color: #408400; /* 你指定的文字顏色 */
         border-radius: 8px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
@@ -228,8 +274,8 @@
 
       /* 提示文字 */
       .success-text {
-        font-size: 14px;
-        font-weight: bold;
+        font-size: 16px;
+        font-weight: 900;
         text-align: center;
       }
     </style>
@@ -256,7 +302,11 @@
         <a class="logout-btn" href="/logout">登出</a>
       </div>
     </header>
-    <div class="workspace-container">
+    <div class="tab-content">
+      <div class="tab-item active" id="keywords">keywords</div>
+      <div class="tab-item" id="templates">templates</div>
+    </div>
+    <div class="workspace-container" id="keywords-container">
       <div class="workspace">
         <h2>自動標籤關鍵字設定</h2>
         <div class="subtitle">
@@ -287,6 +337,48 @@
         <div id="statusMsg"></div>
       </div>
     </div>
+    <div class="workspace-container" id="templates-container">
+      <div class="workspace">
+        <h2>Extended Data Templates名稱規則</h2>
+        <div style="color: #666; font-size: 14px; margin-bottom: 20px">
+          此處為高級正則表達式設定，修改前請確保 Regex
+          語法正確（由上至下依序權重比對）。
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Extended Data Templates:</th>
+              <th>觸發條件 (正則表達式):</th>
+              <th>排除條件 (選填):</th>
+            </tr>
+          </thead>
+          <tbody id="rulesTable">
+            {% for tpl in templates %}
+            <tr class="rule-row" data-id="{{ tpl.id }}">
+              <td>
+                <input type="text" class="tpl-value" value="{{ tpl.value }}" />
+              </td>
+              <td>
+                <input type="text" class="tpl-regex" value="{{ tpl.regex }}" />
+              </td>
+              <td>
+                <input
+                  type="text"
+                  class="tpl-exclude"
+                  value="{{ tpl.exclude_regex }}"
+                />
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="btn-center-region">
+          <button type="button" id="saveBtn" class="save-btn">儲存設定</button>
+        </div>
+      </div>
+    </div>
     <div id="successModal" class="custom-modal">
       <div class="custom-modal-content">
         <div class="success-icon-wrapper">
@@ -303,6 +395,21 @@
     </div>
     <script>
       $(document).ready(function () {
+        // --- 1. Tab 分頁切換點擊事件邏輯 ---
+        $("#keywords").click(function () {
+          $(".tab-item").removeClass("active");
+          $(this).addClass("active");
+          $("#templates-container").hide();
+          $("#keywords-container").css("display", "flex");
+        });
+
+        $("#templates").click(function () {
+          $(".tab-item").removeClass("active");
+          $(this).addClass("active");
+          $("#keywords-container").hide();
+          $("#templates-container").css("display", "flex");
+        });
+
         $("#submitBtn").click(function () {
           var btn = $(this);
           var msgEl = $("#statusMsg");
@@ -343,6 +450,46 @@
               msgEl.addClass("status-error").text("伺服器連線錯誤，儲存失敗。");
             },
           });
+        });
+      });
+    </script>
+    <script>
+      $("#saveBtn").click(function () {
+        var btn = $(this);
+        var payload = [];
+
+        // 遍歷表格每一列抓取資料
+        $(".rule-row").each(function () {
+          payload.push({
+            id: $(this).data("id"),
+            regex: $(this).find(".tpl-regex").val().trim(),
+            exclude_regex: $(this).find(".tpl-exclude").val().trim(),
+            value: $(this).find(".tpl-value").val().trim(),
+          });
+        });
+
+        btn.prop("disabled", true).text("儲存中...");
+
+        $.ajax({
+          url: "/save_template_setting",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify(payload),
+          success: function (res) {
+            btn.prop("disabled", false).text("儲存設定");
+            if (res.status === "success") {
+              $("#successModal").fadeIn(200);
+              setTimeout(function () {
+                $("#successModal").fadeOut(300);
+              }, 2000);
+            } else {
+              alert("錯誤：" + res.message);
+            }
+          },
+          error: function () {
+            alert("連線失敗");
+            btn.prop("disabled", false).text("儲存設定");
+          },
         });
       });
     </script>
