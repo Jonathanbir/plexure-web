@@ -71,7 +71,7 @@
     },
     {
       "id": "tpl4",
-      "regex": "單點.*現折.*\\$|買.*現折.*\\$|單點.*特價",
+      "regex": "單點.*現折|買.*現折",
       "exclude_regex": "",
       "value": "MPA TW Discount Off Product($Amount) Pre tax False"
     },
@@ -83,9 +83,15 @@
     },
     {
       "id": "tpl6",
-      "regex": "單筆.*滿.*現折.*\\$",
+      "regex": "單筆.*滿.*現折",
       "exclude_regex": "\\d+折",
       "value": "MPA TW Discount Off Total Order($Amount) Pre tax False"
+    },
+    {
+      "id": "tpl7",
+      "regex": "\\+.*特價",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Two Product Sets - Reduced Price"
     }
   ]
 }
