@@ -281,6 +281,27 @@ def transform():
             c = clean_empty_text(val)
             return f"{image_base_path}{c}" if c else ""
         
+        # ======= 【最新調整：雙套餐組合減價動態切分邏輯】 =======
+        def process_product_codes_row(r):
+            promo_text = str(r.iloc[11]).strip() if not pd.isna(r.iloc[11]) else ""
+            raw_codes_text = str(r.iloc[17]).strip() if not pd.isna(r.iloc[17]) else ""
+            
+            # 判斷是否為雙套餐組合特價活動 (包含 + 且有 特價)
+            twPriceDeal = bool(re.search(r"\+.*特價", promo_text))
+            
+            if twPriceDeal:
+                # 提取這條資料裡面所有的主數字（用你原本寫好的 extract_main_numbers 函數）
+                all_codes = extract_main_numbers(raw_codes_text)
+                if all_codes:
+                    buy_code = all_codes[0] # 取第一個數字當作 Product Code Buy
+                    # 除了第一個之外，剩下的全部用 "|" 隔開當作 Product Code Discounted
+                    discounted_code = "|".join(all_codes[1:]) if len(all_codes) > 1 else ""
+                    return buy_code, discounted_code
+                return "", ""
+            else:
+                # 若不是組合特價，則走原本標準的傳統切分流程
+                return split_product_codes(r.iloc[17], r.iloc[11])
+        
         out["Internal Name"] = df.iloc[:, 11]
         out["Base Weight"] = df.iloc[:, 14]
         out["Extended Data Templates"] = df.iloc[:, 11].apply(get_extended_template)
@@ -290,7 +311,7 @@ def transform():
         out["Promotion Name(ZH)"] = df.iloc[:, 24].apply(clean_empty_text)
         out["Promotion Short Description(ZH)"] = df.iloc[:, 26].apply(clean_empty_text)
         out["Promotion Long Description(ZH)"] = df.iloc[:, 28].apply(clean_empty_text)
-        res = df.apply(lambda r: split_product_codes(r.iloc[17], r.iloc[11]), axis=1)
+        res = df.apply(process_product_codes_row, axis=1)
         out["Product Code Buy"] = [r[0] for r in res]
         out["Product Code Discounted"] = [r[1] for r in res]
         out["Percentage"] = "1%"
