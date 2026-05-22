@@ -478,6 +478,12 @@
                   value="{{ tpl.regex }}"
                   required
                   placeholder="ex:單點.*折"
+                  {%
+                  if
+                  tpl.disabled
+                  %}disabled{%
+                  endif
+                  %}
                 />
               </td>
               <td>
@@ -485,6 +491,12 @@
                   type="text"
                   class="tpl-exclude"
                   value="{{ tpl.exclude_regex }}"
+                  {%
+                  if
+                  tpl.disabled
+                  %}disabled{%
+                  endif
+                  %}
                 />
               </td>
             </tr>
