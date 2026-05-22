@@ -79,6 +79,7 @@ def generate_tags(promo_text, original_tags_raw):
 def get_extended_template(text):
     if pd.isna(text): return ""
     t = str(text).strip()
+    if not t: return ""
     
     # 指向修正後的 setting.json
     config_path = os.path.join(os.path.dirname(__file__), 'static', 'json', 'setting.json')
@@ -87,9 +88,18 @@ def get_extended_template(text):
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
             for item in config_data.get("templates", []):
+                template_id = item.get("id", "")
                 regex_str = item.get("regex", "")
                 exclude_str = item.get("exclude_regex", "")
                 template_value = item.get("value", "")
+
+                # === 【核心改造】如果遇到 tpl7，直接用你最聰明的 JS 計算加號想法獨立處理 ===
+                if template_id == "tpl7":
+                    plus_count = t.count("+")
+                    twPriceDeal = (plus_count == 1) and ("特價" in t)
+                    if twPriceDeal:
+                        return template_value
+                    continue # 如果不是剛好一個加號配特價，就跳過 tpl7 繼續看底下的規則
                 
                 if regex_str and re.search(regex_str, t):
                     if exclude_str and re.search(exclude_str, t):
@@ -97,7 +107,12 @@ def get_extended_template(text):
                     return template_value
         except Exception as e:
             print(f"get_extended_template 讀取 setting.json 失敗: {e}")
-    return ""
+            
+        # 【最後的金鐘罩防呆】萬一設定檔讀不到，直接在最外層再幫你攔截一次！
+        if t.count("+") == 1 and "特價" in t:
+            return "TW Price Deal - Two Product Sets - Reduced Price"
+            
+        return ""
 
 # ==========================================
 # 核心轉換邏輯 (JSON 產出)
@@ -286,11 +301,15 @@ def transform():
             promo_text = str(r.iloc[11]).strip() if not pd.isna(r.iloc[11]) else ""
             raw_codes_text = str(r.iloc[17]).strip() if not pd.isna(r.iloc[17]) else ""
             
-            # 判斷是否為雙套餐組合特價活動 (包含 + 且有 特價)
-            twPriceDeal = bool(re.search(r"\+.*特價", promo_text))
+            # === 完全依照你的 JS 想法轉換成 Python 寫法 ===
+            # 1. 計算這句話裡面「+」總共出現了幾次 (等於你說的 plusWord.length)
+            plus_count = promo_text.count("+")
+            
+            # 2. 判斷是不是「剛好只有一個加號」且「包含特價」
+            twPriceDeal = (plus_count == 1) and ("特價" in promo_text)
             
             if twPriceDeal:
-                # 提取這條資料裡面所有的主數字（用你原本寫好的 extract_main_numbers 函數）
+                # 提取這條資料裡面所有的主數字
                 all_codes = extract_main_numbers(raw_codes_text)
                 if all_codes:
                     buy_code = all_codes[0] # 取第一個數字當作 Product Code Buy
@@ -299,7 +318,7 @@ def transform():
                     return buy_code, discounted_code
                 return "", ""
             else:
-                # 若不是組合特價，則走原本標準的傳統切分流程
+                # 若不是組合特價（可能沒加號、或加號太多），則走原本標準的傳統切分流程
                 return split_product_codes(r.iloc[17], r.iloc[11])
         
         out["Internal Name"] = df.iloc[:, 11]
