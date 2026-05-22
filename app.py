@@ -496,8 +496,31 @@ def save_template_setting():
             with open(config_path, 'r', encoding='utf-8') as f:
                 current_config = json.load(f)
                 
-        # 更新 templates 區塊
-        current_config["templates"] = req_data
+        # === 【核心安全保護機制】 ===
+        # 建立一個以 id 為 key 的舊樣板對照表
+        old_templates_map = {tpl["id"]: tpl for tpl in current_config.get("templates", [])}
+        
+        final_templates = []
+        for new_tpl in req_data:
+            tpl_id = new_tpl.get("id")
+            
+            # 檢查這個項目在原本的檔案裡是不是被設定為 disabled
+            # 同時相容布林值 true 或字串 "true"
+            is_old_disabled = False
+            if tpl_id in old_templates_map:
+                old_tpl = old_templates_map[tpl_id]
+                is_old_disabled = (old_tpl.get("disabled") is True) or (str(old_tpl.get("disabled")).lower() == "true")
+            
+            if is_old_disabled:
+                # 它是被鎖定的高精準核心項目！
+                # 拒絕前端傳過來的任何修改，百分之百強制恢復原本珍貴的舊資料與屬性
+                final_templates.append(old_templates_map[tpl_id])
+            else:
+                # 🔓 它是一般項目，允許使用者在網頁上任意編輯修改並存檔
+                final_templates.append(new_tpl)
+                
+        # 將最終混合保護後的完整陣列更新回去
+        current_config["templates"] = final_templates
         
         # 寫回設定檔
         with open(config_path, 'w', encoding='utf-8') as f:
