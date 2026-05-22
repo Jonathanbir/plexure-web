@@ -89,9 +89,27 @@
     },
     {
       "id": "tpl7",
-      "regex": "\\+.*特價",
+      "regex": "(已啟動高精準計算：1個加號且有特價)",
       "exclude_regex": "",
       "value": "TW Price Deal - Two Product Sets - Reduced Price"
+    },
+    {
+      "id": "tpl8",
+      "regex": "(已啟動高精準計算：2個加號且有特價)",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Three Product Sets - Reduced Price"
+    },
+    {
+      "id": "tpl9",
+      "regex": "(已啟動高精準計算：3個加號)",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Four Product Sets - Reduced Price"
+    },
+    {
+      "id": "tpl10",
+      "regex": "(已啟動高精準計算：4個加號)",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Five Product Sets - Reduced Price"
     }
   ]
 }

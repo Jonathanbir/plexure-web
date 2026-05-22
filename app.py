@@ -99,6 +99,21 @@ def get_extended_template(text):
                     twPriceDeal = (plus_count == 1) and ("特價" in t)
                     if twPriceDeal:
                         return template_value
+                if template_id == "tpl8":
+                    plus_count = t.count("+")
+                    threePriceDeal = (plus_count == 2) and ("特價" in t)
+                    if threePriceDeal:
+                        return template_value                    
+                if template_id == "tpl9":
+                    plus_count = t.count("+")
+                    fourPriceDeal = (plus_count == 3)
+                    if fourPriceDeal:
+                        return template_value                               
+                if template_id == "tpl10":
+                    plus_count = t.count("+")
+                    fivePriceDeal = (plus_count == 4)
+                    if fivePriceDeal:
+                        return template_value
                     continue # 如果不是剛好一個加號配特價，就跳過 tpl7 繼續看底下的規則
                 
                 if regex_str and re.search(regex_str, t):
@@ -107,10 +122,16 @@ def get_extended_template(text):
                     return template_value
         except Exception as e:
             print(f"get_extended_template 讀取 setting.json 失敗: {e}")
-            
+
         # 【最後的金鐘罩防呆】萬一設定檔讀不到，直接在最外層再幫你攔截一次！
         if t.count("+") == 1 and "特價" in t:
             return "TW Price Deal - Two Product Sets - Reduced Price"
+        if t.count("+") == 2 and "特價" in t:
+            return "TW Price Deal - Three Product Sets - Reduced Price"
+        if t.count("+") == 3 in t:
+            return "TW Price Deal - Four Product Sets - Reduced Price"
+        if t.count("+") == 4 in t:
+            return "TW Price Deal - Five Product Sets - Reduced Price"
             
         return ""
 
@@ -307,8 +328,11 @@ def transform():
             
             # 2. 判斷是不是「剛好只有一個加號」且「包含特價」
             twPriceDeal = (plus_count == 1) and ("特價" in promo_text)
+            threePriceDeal = (plus_count == 2) and ("特價" in promo_text)
+            fourPriceDeal = (plus_count == 3)
+            fivePriceDeal = (plus_count == 4)
             
-            if twPriceDeal:
+            if twPriceDeal or threePriceDeal or fourPriceDeal or fivePriceDeal:
                 # 提取這條資料裡面所有的主數字
                 all_codes = extract_main_numbers(raw_codes_text)
                 if all_codes:
@@ -389,13 +413,66 @@ def setting():
             { "filter": f"dealFilter{i}", "values": [] } for i in range(1, 10)
         ],
         "templates": [
-            {"id": "tpl1","regex": "買一送一|買.*送|單點.*送|單筆.*滿.*送","exclude_regex": "加(?:\\$|\\d+元).*送","value": "TW Buy One Get One Or Another Discounted(Percentage)"},
-            {"id": "tpl2","regex": "單點.*加(?:\\$|\\d+元).*送","exclude_regex": "","value": "TW Buy One Get One Or Another Discounted($Amount)"},
-            {"id": "tpl3","regex": "單點.*(?:打?\\d+折|折.*%)","exclude_regex": "","value": "MPA TW Discount Off Product(Percentage) Pre tax False"},
-            {"id": "tpl4","regex": "單點.*現折|買.*現折","exclude_regex": "","value": "MPA TW Discount Off Product($Amount) Pre tax False"},
-            {"id": "tpl5","regex": "單筆.*滿.*\\d+折","exclude_regex": "現折","value": "MPA TW Discount Off Total Order(Percentage) Pre Tax False"},
-            {"id": "tpl6","regex": "單筆.*滿.*現折","exclude_regex": "\\d+折","value": "MPA TW Discount Off Total Order($Amount) Pre tax False"},
-            {"id": "tpl7","regex": "\\+.*特價","exclude_regex": "","value": "TW Price Deal - Two Product Sets - Reduced Price"}
+            {
+            "id": "tpl1",
+            "regex": "買一送一|買.*送|單點.*送|單筆.*滿.*送",
+            "exclude_regex": "加(?:\\$|\\d+元).*送",
+            "value": "TW Buy One Get One Or Another Discounted(Percentage)"
+            },
+            {
+            "id": "tpl2",
+            "regex": "單點.*加(?:\\$|\\d+元).*送",
+            "exclude_regex": "",
+            "value": "TW Buy One Get One Or Another Discounted($Amount)"
+            },
+            {
+            "id": "tpl3",
+            "regex": "單點.*(?:打?\\d+折|折.*%)",
+            "exclude_regex": "",
+            "value": "MPA TW Discount Off Product(Percentage) Pre tax False"
+            },
+            {
+            "id": "tpl4",
+            "regex": "單點.*現折|買.*現折",
+            "exclude_regex": "",
+            "value": "MPA TW Discount Off Product($Amount) Pre tax False"
+            },
+            {
+            "id": "tpl5",
+            "regex": "單筆.*滿.*\\d+折",
+            "exclude_regex": "現折",
+            "value": "MPA TW Discount Off Total Order(Percentage) Pre Tax False"
+            },
+            {
+            "id": "tpl6",
+            "regex": "單筆.*滿.*現折",
+            "exclude_regex": "\\d+折",
+            "value": "MPA TW Discount Off Total Order($Amount) Pre tax False"
+            },
+            {
+            "id": "tpl7",
+            "regex": "(已啟動高精準計算：1個加號且有特價)",
+            "exclude_regex": "",
+            "value": "TW Price Deal - Two Product Sets - Reduced Price"
+            },
+            {
+            "id": "tpl8",
+            "regex": "(已啟動高精準計算：2個加號且有特價)",
+            "exclude_regex": "",
+            "value": "TW Price Deal - Three Product Sets - Reduced Price"
+            },
+            {
+            "id": "tpl9",
+            "regex": "(已啟動高精準計算：3個加號)",
+            "exclude_regex": "",
+            "value": "TW Price Deal - Four Product Sets - Reduced Price"
+            },
+            {
+            "id": "tpl10",
+            "regex": "(已啟動高精準計算：4個加號)",
+            "exclude_regex": "",
+            "value": "TW Price Deal - Five Product Sets - Reduced Price"
+            }
         ]
     }
 
@@ -504,7 +581,7 @@ DEFAULT_CONFIG = {
         {"filter": "dealFilter9", "values": ["咖啡", "那堤", "奶茶", "紅茶", "綠茶", "可口可樂", "雪碧", "檸檬紅茶", "奶昔", "冰", "飲品", "飲料"]}
     ],
     "templates": [
-    {
+     {
       "id": "tpl1",
       "regex": "買一送一|買.*送|單點.*送|單筆.*滿.*送",
       "exclude_regex": "加(?:\\$|\\d+元).*送",
@@ -542,9 +619,27 @@ DEFAULT_CONFIG = {
     },
     {
       "id": "tpl7",
-      "regex": "\\+.*特價",
+      "regex": "(已啟動高精準計算：1個加號且有特價)",
       "exclude_regex": "",
       "value": "TW Price Deal - Two Product Sets - Reduced Price"
+    },
+    {
+      "id": "tpl8",
+      "regex": "(已啟動高精準計算：2個加號且有特價)",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Three Product Sets - Reduced Price"
+    },
+    {
+      "id": "tpl9",
+      "regex": "(已啟動高精準計算：3個加號)",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Four Product Sets - Reduced Price"
+    },
+    {
+      "id": "tpl10",
+      "regex": "(已啟動高精準計算：4個加號)",
+      "exclude_regex": "",
+      "value": "TW Price Deal - Five Product Sets - Reduced Price"
     }
     ]
 }
