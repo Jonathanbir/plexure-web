@@ -220,10 +220,13 @@ def perform_transformation(data_path, model_path, location_path=None):
 
    # --- 修正後的 JSON 產出邏輯 ---
     plexure_json = {"Name": int(datetime.datetime.now().strftime("%Y%m%d")), "CreationDate": 45951, "Commands": []}
-    new_offer_xp = "xpath=//button[contains(@class, 'btn-primary') and .//span[contains(text(), 'New Offer')]]"
 
     # 使用 values 快速讀取整列資料
     rows = list(ws_target.iter_rows(min_row=3, max_col=5, values_only=True))
+
+  # 【核心跨行狀態傳遞】
+    # current_row_is_twPriceDeal: 用來標記目前這筆活動是否中了組合餐
+    current_row_is_twPriceDeal = False
     
     for idx, row in enumerate(rows):
         curr_r = idx + 3
@@ -235,9 +238,17 @@ def perform_transformation(data_path, model_path, location_path=None):
         # 條件：行號為 3 (第一筆) 或是前一行的 Target 是 btnSave2 (代表上一筆結束)
         if curr_r == 3 or (str(ws_target.cell(row=curr_r-1, column=4).value) == "id=btnSave2"):
             plexure_json["Commands"].append({"Command": "open", "Target": str(d2_url), "Value": ""})
+            # 每一筆新活動開始時，重置所有暫存狀態
+            current_row_is_twPriceDeal = False
 
         # 2. 處理當前指令 (必須在迴圈內)
         if cmd or target:
+            # === 【核心新增：舊欄位殘留清洗過濾網】 ===
+            # 如果目前這筆活動中了組合餐，那麼原本樣板裡自帶的舊 7 號與舊 8 號欄位指令，通通強行攔截並丟棄！
+            if current_row_is_twPriceDeal:
+                if "ExtendedDataDynamicFields_7__Value" in target or "ExtendedDataDynamicFields_8__Value" in target:
+                    continue  # 抓到了！直接跳過這行，不讓它寫入 plexure.json
+
             # 圖片儲存防呆捲動
             if "Promo_en_saveButton" in target or "Promo_zh_saveButton" in target:
                 clean_id = target.replace('id=', '')
@@ -251,11 +262,71 @@ def perform_transformation(data_path, model_path, location_path=None):
             new_cmd = {"Command": cmd, "Target": target}
             if val: new_cmd["Value"] = val
             plexure_json["Commands"].append(new_cmd)
+
+          # ====================================================================
+            # 【你的精準思路】步驟一：截獲 5 號欄位輸入框，拿 val 判定文案並開燈
+            # ====================================================================
+            if "ExtendedDataDynamicFields_5__Value" in target and cmd == "type":
+                promo_text_json = val  # 拿到最純淨的文案 "單點勁辣鷄腿堡+$38元飲品特價$99..."
+                
+                # 執行你最自豪的 JS 想法數加號判定模組
+                plus_count_json = promo_text_json.count("+")
+                twPriceDeal = (plus_count_json == 1) and ("特價" in promo_text_json)
+                
+                if twPriceDeal:
+                    # 條件完全符合！把這筆活動的加開訊號燈與去重過濾網同時點亮！
+                    current_row_is_twPriceDeal = True
+
+            # ====================================================================
+            # 【你的精準思路】步驟二：走到 6 號欄位輸入框寫完的當下，立刻噴出最新的 7~13 號
+            # ====================================================================
+            if "ExtendedDataDynamicFields_6__Value" in target and cmd == "type" and current_row_is_twPriceDeal:
+                
+                # 動態精準算出這筆活動在原始 data.xlsx 是第幾列 (樣板高度 76)
+                calculated_excel_row = ((curr_r - 3) // template_height) + 2
+                
+                # 撈出對應當前列的原始 K 欄 (11) 與 L 欄 (12)
+                k_val = str(wb_source.worksheets[0].cell(row=calculated_excel_row, column=11).value or "").strip()
+                l_val = str(wb_source.worksheets[0].cell(row=calculated_excel_row, column=12).value or "").strip()
+
+                # 立刻在後面追加最新的、乾淨的 7~13 號一條龍自動化指令
+                # 欄位 7 (固定值 "1")
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_7__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_7__Value", "Value": "1"})
+                
+                # 欄位 8 (精準帶入最新 K 欄值)
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_8__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_8__Value", "Value": k_val})
+                
+                # 欄位 9 (固定值 "1")
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value", "Value": "1"})
+                
+                # 欄位 10 (精準帶入最新 L 欄值)
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value", "Value": l_val})
+                
+                # 欄位 11 (固定值 "0")
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value", "Value": "0"})
+                
+                # 欄位 12 (精準帶入最新 L 欄值)
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value", "Value": l_val})
+                
+                # 欄位 13 (固定值 "0")
+                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value"})
+                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value", "Value": "0"})
+                
+                # 注意：這邊【不要】把 current_row_is_twPriceDeal 關掉！
+                # 必須讓它繼續開著，直到這筆活動走完。這樣下方迴圈遇到舊的 7、8 號時才能順利進行攔截跳過！
             
             # 存檔後切換分頁以穩定流程
             if "btnSave2" in target:
                 plexure_json["Commands"].append({"Command": "pause", "Target": "1500"})
                 plexure_json["Commands"].append({"Command": "selectWindow", "Target": "tab=0"})
+                # 這筆活動徹底結束存檔了，此時關閉訊號燈，放行下一筆活動
+                current_row_is_twPriceDeal = False
 
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 
