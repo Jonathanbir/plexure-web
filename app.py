@@ -25,6 +25,30 @@ def extract_main_numbers(text):
     matches = re.findall(r"(?m)^\s*(\d+)", text)
     return matches
 
+def extract_combo_prices(text):
+    if not text or pd.isna(text):
+        return ""
+    
+    # 依換行符號拆開
+    lines = [line.strip() for line in str(text).split('\n') if line.strip()]
+    
+    # 如果行數小於 2，代表不符合組合明細的格式，直接回傳空字串
+    if len(lines) < 2:
+        return ""
+        
+    # 去掉最後一行的總價，只留前面幾行的品項明細
+    item_lines = lines[:-1]
+    
+    prices = []
+    for line in item_lines:
+        # 使用正則表達式 r"(\d+)$" -> 代表「精準匹配黏在整行最後面(網右看)的數字」
+        match = re.search(r"(\d+)$", line)
+        if match:
+            prices.append(match.group(1))
+            
+    # 最後用逗號 "," 把抓到的金額黏起來，變成 "67,32"
+    return ",".join(prices)
+
 def is_buy1get1(text):
     if not text: return False
     return "買一送一" in str(text) or bool(re.search(r"買\s*[\d一-十]+\s*送\s*[\d一-十]+", str(text)))
@@ -225,8 +249,8 @@ def perform_transformation(data_path, model_path, location_path=None):
     rows = list(ws_target.iter_rows(min_row=3, max_col=5, values_only=True))
 
   # 【核心跨行狀態傳遞】
-    # current_row_is_twPriceDeal: 用來標記目前這筆活動是否中了組合餐
-    current_row_is_twPriceDeal = False
+    # current_row_is_hasPlus: 用來標記目前這筆活動是否中了組合餐
+    current_row_is_hasPlus = False
     
     for idx, row in enumerate(rows):
         curr_r = idx + 3
@@ -239,13 +263,13 @@ def perform_transformation(data_path, model_path, location_path=None):
         if curr_r == 3 or (str(ws_target.cell(row=curr_r-1, column=4).value) == "id=btnSave2"):
             plexure_json["Commands"].append({"Command": "open", "Target": str(d2_url), "Value": ""})
             # 每一筆新活動開始時，重置所有暫存狀態
-            current_row_is_twPriceDeal = False
+            current_row_is_hasPlus = False
 
         # 2. 處理當前指令 (必須在迴圈內)
         if cmd or target:
             # === 【核心新增：舊欄位殘留清洗過濾網】 ===
             # 如果目前這筆活動中了組合餐，那麼原本樣板裡自帶的舊 7 號與舊 8 號欄位指令，通通強行攔截並丟棄！
-            if current_row_is_twPriceDeal:
+            if current_row_is_hasPlus:
                 if "ExtendedDataDynamicFields_7__Value" in target or "ExtendedDataDynamicFields_8__Value" in target:
                     continue  # 抓到了！直接跳過這行，不讓它寫入 plexure.json
 
@@ -271,24 +295,32 @@ def perform_transformation(data_path, model_path, location_path=None):
                 
                 # 執行你最自豪的 JS 想法數加號判定模組
                 plus_count_json = promo_text_json.count("+")
-                twPriceDeal = (plus_count_json == 1) and ("特價" in promo_text_json)
-                
-                if twPriceDeal:
-                    # 條件完全符合！把這筆活動的加開訊號燈與去重過濾網同時點亮！
-                    current_row_is_twPriceDeal = True
+                isHasPlus = (plus_count_json >= 1)
+                isHasOnePlus = (plus_count_json == 1)
+                isHasTwoPlus = (plus_count_json == 2)
+                isHasThreePlus = (plus_count_json == 3)
+                isHasFourPlus = (plus_count_json == 4)
 
-            # ====================================================================
-            # 【你的精準思路】步驟二：走到 6 號欄位輸入框寫完的當下，立刻噴出最新的 7~13 號
-            # ====================================================================
-            if "ExtendedDataDynamicFields_6__Value" in target and cmd == "type" and current_row_is_twPriceDeal:
-                
-                # 動態精準算出這筆活動在原始 data.xlsx 是第幾列 (樣板高度 76)
+                     # 動態精準算出這筆活動在原始 data.xlsx 是第幾列 (樣板高度 76)
                 calculated_excel_row = ((curr_r - 3) // template_height) + 2
                 
                 # 撈出對應當前列的原始 K 欄 (11) 與 L 欄 (12)
                 k_val = str(wb_source.worksheets[0].cell(row=calculated_excel_row, column=11).value or "").strip()
                 l_val = str(wb_source.worksheets[0].cell(row=calculated_excel_row, column=12).value or "").strip()
+                l_val_parts = [p.strip() for p in l_val.split(",") if p.strip()]
+                
+                if isHasPlus:
+                    # 條件完全符合！把這筆活動的狀態記錄到跨行旗標中，帶去給 6 號欄位使用
+                    current_row_is_hasPlus = True
+                    current_row_isHasOnePlus = isHasOnePlus
+                    current_row_isHasTwoPlus = isHasTwoPlus
+                    current_row_isHasThreePlus = isHasThreePlus
+                    current_row_isHasFourPlus = isHasFourPlus
 
+            # ====================================================================
+            # 【你的精準思路】步驟二：走到 6 號欄位輸入框寫完的當下，立刻噴出最新的 7~13 號
+            # ====================================================================
+            if "ExtendedDataDynamicFields_6__Value" in target and cmd == "type" and current_row_is_hasPlus:
                 # 立刻在後面追加最新的、乾淨的 7~13 號一條龍自動化指令
                 # 欄位 7 (固定值 "1")
                 plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_7__Value"})
@@ -302,23 +334,175 @@ def perform_transformation(data_path, model_path, location_path=None):
                 plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value"})
                 plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_9__Value", "Value": "1"})
                 
-                # 欄位 10 (精準帶入最新 L 欄值)
-                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value"})
-                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value", "Value": l_val})
-                
-                # 欄位 11 (固定值 "0")
-                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value"})
-                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value", "Value": "0"})
-                
-                # 欄位 12 (精準帶入最新 L 欄值)
-                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value"})
-                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value", "Value": l_val})
-                
-                # 欄位 13 (固定值 "0")
-                plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value"})
-                plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value", "Value": "0"})
-                
-                # 注意：這邊【不要】把 current_row_is_twPriceDeal 關掉！
+                if current_row_isHasOnePlus:
+                    # 欄位 10 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value", "Value": l_val_parts[0]})
+                    
+                    # 欄位 11 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value", "Value": "0"})
+                    
+                    # 欄位 12 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value", "Value": l_val_parts[1]})
+                    
+                    # 欄位 13 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value", "Value": "0"})
+
+                # 剛好等於 2 個加號時執行 (只有陣列長度夠時才取 index 2)
+                if current_row_isHasTwoPlus and len(l_val_parts) > 2:
+                     # 欄位 10 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value", "Value":  k_val})
+                    
+                    # 欄位 11 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value", "Value": "1"})
+                    
+                    # 欄位 12 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value", "Value": l_val_parts[0]})
+                    
+                    # 欄位 13 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value", "Value": "0"})
+
+                    # 欄位 14 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_14__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_14__Value", "Value": l_val_parts[1]})
+                    
+                    # 欄位 15 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_15__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_15__Value", "Value": "0"})
+
+                    # 欄位 16 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_16__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_16__Value", "Value": l_val_parts[2]})
+                    
+                    # 欄位 17 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_17__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_17__Value", "Value": "0"})  
+
+                    
+                # 剛好等於 3 個加號時執行 (只有陣列長度夠時才取 index 3)
+                if current_row_isHasThreePlus and len(l_val_parts) > 3:
+                     # 欄位 10 (精準帶入最新 K 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value", "Value":  k_val})
+                    
+                    # 欄位 11 (固定值 "1")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value", "Value": "1"})
+                    
+                    # 欄位 12 (精準帶入最新 K 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value", "Value": k_val})
+                    
+                    # 欄位 13 (固定值 "1")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value", "Value": "1"})
+
+                    # 欄位 14 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_14__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_14__Value", "Value": l_val_parts[0]})
+                    
+                    # 欄位 15 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_15__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_15__Value", "Value": "0"})
+
+                    # 欄位 16 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_16__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_16__Value", "Value": l_val_parts[1]})
+                    
+                    # 欄位 17 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_17__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_17__Value", "Value": "0"})  
+                    
+                    # 欄位 18 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_18__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_18__Value", "Value": l_val_parts[2]})
+                    
+                    # 欄位 19 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_19__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_19__Value", "Value": "0"})
+
+                    # 欄位 20 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_20__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_20__Value", "Value": l_val_parts[3]})
+                    
+                    # 欄位 21 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_21__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_21__Value", "Value": "0"})
+
+                # 剛好等於 4 個加號時執行 (只有陣列長度夠時才取 index 4)
+                if current_row_isHasFourPlus and len(l_val_parts) > 4:
+                     # 欄位 10 (精準帶入最新 K 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_10__Value", "Value":  k_val})
+                    
+                    # 欄位 11 (固定值 "1")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_11__Value", "Value": "1"})
+                    
+                    # 欄位 12 (精準帶入最新 K 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_12__Value", "Value": k_val})
+                    
+                    # 欄位 13 (固定值 "1")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_13__Value", "Value": "1"})
+
+                    # 欄位 14 (精準帶入最新 K 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_14__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_14__Value", "Value": k_val})
+                    
+                    # 欄位 15 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_15__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_15__Value", "Value": "1"})
+
+                    # 欄位 16 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_16__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_16__Value", "Value": l_val_parts[0]})
+                    
+                    # 欄位 17 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_17__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_17__Value", "Value": "0"})  
+                    
+                    # 欄位 18 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_18__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_18__Value", "Value": l_val_parts[1]})
+                    
+                    # 欄位 19 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_19__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_19__Value", "Value": "0"})
+
+                    # 欄位 20 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_20__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_20__Value", "Value": l_val_parts[2]})
+                    
+                    # 欄位 21 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_21__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_21__Value", "Value": "0"})
+
+                    # 欄位 22 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_22__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_22__Value", "Value": l_val_parts[3]})
+                    
+                    # 欄位 23 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_23__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_23__Value", "Value": "0"})
+                    
+
+                    # 欄位 24 (精準帶入最新 L 欄值)
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_24__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_24__Value", "Value": l_val_parts[4]})
+                    
+                    # 欄位 25 (固定值 "0")
+                    plexure_json["Commands"].append({"Command": "click", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_25__Value"})
+                    plexure_json["Commands"].append({"Command": "type", "Target": "id=OfferPlacement_ExtendedDataFields_ExtendedDataDynamicFields_25__Value", "Value": "0"})
+                # 注意：這邊【不要】把 current_row_is_hasPlus 關掉！
                 # 必須讓它繼續開著，直到這筆活動走完。這樣下方迴圈遇到舊的 7、8 號時才能順利進行攔截跳過！
             
             # 存檔後切換分頁以穩定流程
@@ -326,7 +510,7 @@ def perform_transformation(data_path, model_path, location_path=None):
                 plexure_json["Commands"].append({"Command": "pause", "Target": "1500"})
                 plexure_json["Commands"].append({"Command": "selectWindow", "Target": "tab=0"})
                 # 這筆活動徹底結束存檔了，此時關閉訊號燈，放行下一筆活動
-                current_row_is_twPriceDeal = False
+                current_row_is_hasPlus = False
 
     return json.dumps(plexure_json, ensure_ascii=False, indent=2)
 
@@ -389,32 +573,44 @@ def transform():
             return f"{image_base_path}{c}" if c else ""
         
         # ======= 【最新調整：雙套餐組合減價動態切分邏輯】 =======
-        def process_product_codes_row(r):
+        # ======= 【最新調整：雙套餐組合減價動態切分 ＆ L欄金額明細提取邏輯】 =======
+        def process_combo_and_prices_row(r):
             promo_text = str(r.iloc[11]).strip() if not pd.isna(r.iloc[11]) else ""
             raw_codes_text = str(r.iloc[17]).strip() if not pd.isna(r.iloc[17]) else ""
             
-            # === 完全依照你的 JS 想法轉換成 Python 寫法 ===
-            # 1. 計算這句話裡面「+」總共出現了幾次 (等於你說的 plusWord.length)
-            plus_count = promo_text.count("+")
+            # 讀取 plexure.xlsm 的第 T 欄 (Python 索引值為 19)
+            t_col_text = str(r.iloc[19]).strip() if not pd.isna(r.iloc[19]) else ""
             
-            # 2. 判斷是不是「剛好只有一個加號」且「包含特價」
-            twPriceDeal = (plus_count == 1) and ("特價" in promo_text)
-            threePriceDeal = (plus_count == 2) and ("特價" in promo_text)
-            fourPriceDeal = (plus_count == 3)
-            fivePriceDeal = (plus_count == 4)
+            # 計算加號數量與價格特徵
+            plus_count = promo_text.count("+")
+            has_price = ("特價" in promo_text) or ("$" in promo_text)
+            
+            twPriceDeal = (plus_count == 1) and has_price
+            threePriceDeal = (plus_count == 2) and has_price
+            fourPriceDeal = (plus_count == 3) and has_price
+            fivePriceDeal = (plus_count == 4) and has_price
             
             if twPriceDeal or threePriceDeal or fourPriceDeal or fivePriceDeal:
-                # 提取這條資料裡面所有的主數字
+                # 1. 處理 Product Code
                 all_codes = extract_main_numbers(raw_codes_text)
+                buy_code, discounted_code = "", ""
                 if all_codes:
-                    buy_code = all_codes[0] # 取第一個數字當作 Product Code Buy
-                    # 除了第一個之外，剩下的全部用 "|" 隔開當作 Product Code Discounted
+                    buy_code = all_codes[0]
                     discounted_code = "|".join(all_codes[1:]) if len(all_codes) > 1 else ""
-                    return buy_code, discounted_code
-                return "", ""
+                
+                # 2. 核心：處理 T 欄換行文字，抽取金額變成 "67,32" 放進 L 欄
+                l_column_value = extract_combo_prices(t_col_text)
+                if not l_column_value:
+                    l_column_value = "1%" 
+                    
+                # 🎯【精準修復】確保這裡 return 的第三個參數是 l_column_value，不要再寫成 l_val
+                return buy_code, discounted_code, l_column_value
             else:
-                # 若不是組合特價（可能沒加號、或加號太多），則走原本標準的傳統切分流程
-                return split_product_codes(r.iloc[17], r.iloc[11])
+                b_code, d_code = split_product_codes(r.iloc[17], r.iloc[11])
+                return b_code, d_code, "1%"
+
+        # 執行每列資料的動態 apply 處理
+        res = df.apply(process_combo_and_prices_row, axis=1)
         
         out["Internal Name"] = df.iloc[:, 11]
         out["Base Weight"] = df.iloc[:, 14]
@@ -425,10 +621,11 @@ def transform():
         out["Promotion Name(ZH)"] = df.iloc[:, 24].apply(clean_empty_text)
         out["Promotion Short Description(ZH)"] = df.iloc[:, 26].apply(clean_empty_text)
         out["Promotion Long Description(ZH)"] = df.iloc[:, 28].apply(clean_empty_text)
-        res = df.apply(process_product_codes_row, axis=1)
+        # 讓每一列 (axis=1) 都去執行上面的一體化機器人，把三個成果打包成一個大陣列丟給 res
+        res = df.apply(process_combo_and_prices_row, axis=1)
         out["Product Code Buy"] = [r[0] for r in res]
         out["Product Code Discounted"] = [r[1] for r in res]
-        out["Percentage"] = "1%"
+        out["Percentage"] = [r[2] for r in res] # 這裡就會把完美處理好的 "67,32" 直接灌進 data.xlsx 的第 L 欄！
         out["Promotional Image En"] = df.iloc[:, 49].apply(get_img)
         out["Promotional Image Zh"] = df.iloc[:, 50].apply(get_img)
         out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
