@@ -120,7 +120,6 @@
 
       label {
         display: block;
-        margin-bottom: 8px;
         color: #666;
         font-size: 14px;
         font-weight: bold;
@@ -144,11 +143,11 @@
       .first-input-content {
         display: flex;
         align-items: center;
+        margin-bottom: 8px;
       }
 
       .btn-preview {
         margin-left: 15px;
-        margin-bottom: 8px;
         padding: 4px 12px;
         font-size: 13px;
         background-color: #777;
@@ -262,6 +261,7 @@
         color: white;
         position: sticky; /* 讓表頭死死固定在最上方，往下滾動時欄位名不會消失 */
         top: -20px;
+        z-index: 999;
         padding: 10px;
         text-align: center;
         border: 1px solid #454d55;
@@ -337,6 +337,68 @@
         border-radius: 4px;
         padding: 10px;
       }
+
+      /* 必填欄位漏填時的「爆亮紅框」提醒 */
+      #excelPreviewContainer td.empty-required-cell {
+        border: 2px solid #dc3545 !important; /* 粗紅框 */
+        background-color: #f8d7da !important; /* 淡粉紅背景 */
+        position: relative;
+      }
+      /* 貼心小彩蛋：滑鼠滑過去紅框格時，會出現「此欄必填」的驚嘆號提示 */
+      #excelPreviewContainer td.empty-required-cell::after {
+        content: "必填未填";
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 11px;
+        color: #dc3545;
+        font-weight: bold;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+
+      /* 紅色卡關按鈕的專屬外觀 */
+      .btn-danger-submit {
+        background-color: #dc3545 !important;
+        color: white !important;
+        border: 1px solid #bd2130 !important;
+        box-shadow: 0 4px 6px rgba(220, 53, 69, 0.2) !important;
+      }
+      .btn-danger-submit:hover {
+        background-color: #c82333 !important;
+        cursor: pointer;
+      }
+
+      #alertMissingItems,
+      #alertMissingModalItems {
+        display: none;
+        margin-left: 10px;
+        color: #dc3545;
+        font-weight: bold;
+        font-size: 14px;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* 貼心小動畫：讓右邊的 (表單有未填項目) 警示燈微微閃爍，吸引使用者注意 */
+      @keyframes alertBlink {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+      .alert-missing-text {
+        animation: alertBlink 1.5s infinite;
+        display: inline-flex;
+        align-items: center;
+      }
     </style>
   </head>
   <body>
@@ -380,6 +442,10 @@
                   ><i class="fa-solid fa-eye"></i>預視資料表</span
                 >
               </button>
+              <span id="alertMissingItems" class="alert-missing-text">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                (表單有未填項目)
+              </span>
             </div>
             <input type="text" value="資料表已就緒" disabled />
           </div>
@@ -402,7 +468,15 @@
         </div>
         <div class="btn-group">
           <button type="button" id="runTransform" class="btn-submit">
-            產出最終 JSON
+            產出最終 JSON</button
+          ><button
+            type="button"
+            id="backStep1"
+            class="btn-submit btn-danger-submit"
+            style="display: none"
+            onclick="window.location.href='{{ url_for('index') }}'"
+          >
+            請回上一步調整表單
           </button>
         </div>
         <p id="statusMsg" class="login-message"></p>
@@ -413,6 +487,10 @@
         <div class="excelPreviewModal-body">
           <h3 class="font-awesome-flex">
             <i class="fa-solid fa-table"></i>data.xlsx 即時數據預覽
+            <span id="alertMissingModalItems" class="alert-missing-modal-text">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              (表單必填項目:"Title EN", "Desc EN", "Terms EN")
+            </span>
           </h3>
           <span id="closePreviewModal">&times;</span>
         </div>
@@ -420,52 +498,185 @@
       </div>
     </div>
     <script>
-      // ====================================================================
-      // 🎯 【最新新增】一鍵彈出大魔王資料表預視功能
-      // ====================================================================
-      var modal = $("#excelPreviewModal");
+      $(document).ready(function () {
+        var modal = $("#excelPreviewModal");
+        var btnPreview = $("#btnPreviewExcel");
+        var originalPreviewText = btnPreview.html();
 
-      // 點擊「🔍 預視資料表」按鈕時發動
-      $("#btnPreviewExcel").on("click", function () {
-        var btn = $(this);
-        var originalText = btn.html();
-        btn
-          .prop("disabled", true)
-          .html(
-            "<span class='font-awesome-flex'><i class='fa-solid fa-hourglass-start'></i> 讀取中...</span>",
-          );
+        // 全域暫存，用來儲存經檢查過且上好紅框的完整表格 HTML 成果
+        var cachedCheckedTableHtml = "";
 
-        $.ajax({
-          url: "/api/preview_data",
-          type: "GET",
-          success: function (res) {
-            btn.prop("disabled", false).html(originalText);
-            if (res.status === "success") {
-              // 把後端封裝好的 HTML 表格直接倒進彈窗容器
-              $("#excelPreviewContainer").html(res.data);
-              // 把 Modal 的排版模式調整為 flex (顯示出來)
-              modal.css("display", "flex");
-            } else {
-              alert("預覽失敗: " + res.message);
-            }
-          },
-          error: function (xhr) {
-            btn.prop("disabled", false).html(originalText);
-            alert("伺服器連線失敗，請確認後台執行狀態");
-          },
-        });
-      });
+        // ====================================================================
+        // 【核心新增】一載入網頁立刻自動執行的：智慧卡關防呆雷達 (主動掃描)
+        // ====================================================================
+        function runGatekeeperCheck() {
+          // 在背景靜悄悄讀取 API
+          $.ajax({
+            url: "/api/preview_data",
+            type: "GET",
+            success: function (res) {
+              if (res.status === "success") {
+                // 建立一個隱形虛擬容器來解析表格，不影響使用者視覺
+                var tempDiv = $("<div>").html(res.data);
 
-      // 點擊右上角叉叉「&times;」時關閉彈窗
-      $("#closePreviewModal").on("click", function () {
-        modal.css("display", "none");
-      });
+                // 你指定的黃金檢查三大欄位
+                var requiredHeaders = ["Title EN", "Desc EN", "Terms EN"];
+                var targetIndexes = [];
 
-      // 點擊彈窗外圍深色陰影區域時，也自動貼心關閉彈窗
-      $(window).on("click", function (event) {
-        if ($(event.target).is(modal)) {
-          modal.css("display", "none");
+                // 🛰️ 雷達 A 階段：鎖定標頭位置
+                tempDiv.find("table th").each(function (index) {
+                  var headerText = $.trim($(this).text());
+                  if (requiredHeaders.indexOf(headerText) !== -1) {
+                    targetIndexes.push(index);
+                  }
+                });
+
+                var hasAnyError = false;
+
+                // 🛰️ 雷達 B 階段：逐列檢查，滿足你說的 length === 0 (即未填) 則執行紅框與狀態警報
+                tempDiv.find("table tbody tr").each(function () {
+                  var rowCells = $(this).find("td");
+
+                  $.each(targetIndexes, function (i, colIndex) {
+                    var targetCell = rowCells.eq(colIndex);
+                    var cellText = $.trim(targetCell.text());
+
+                    // 💡 判定核心：只要未填（長度為0）
+                    if (cellText.length === 0) {
+                      targetCell.addClass("empty-required-cell"); // 上網格紅框
+                      hasAnyError = true; // 觸發有錯誤旗標
+                    }
+                  });
+                });
+
+                // 將上好紅框與抓漏完成的完美表格，存進全域緩存中
+                cachedCheckedTableHtml = tempDiv.html();
+
+                // 🛰️ 雷達 C 階段：【遵照指定】網頁一載入，根據 hasAnyError 直接開關紅字與按鈕
+                if (hasAnyError) {
+                  //  狀況一：發現未填項目！
+                  $("#alertMissingItems").css("display", "inline-flex"); // 點亮紅字提示 (表單有未填項目)
+                  $("#alertMissingModalItems").css("display", "inline-flex"); // 點亮紅字提示 (表單有未填項目)
+                  $("#runTransform").hide(); // 沒收、隱藏原本的「產出最終 JSON」按鈕
+                  $("#backStep1").show(); // 強制彈出紅色的「請回上一步調整表單」按鈕
+                } else {
+                  //  狀況二：大獲全勝，完全填滿
+                  $("#alertMissingItems").hide();
+                  $("#alertMissingModalItems").hide();
+                  $("#backStep1").hide();
+                  $("#runTransform").show(); // 安全放行，可以產出 JSON
+                }
+              } else {
+                console.error("背景自動防呆掃描失敗: " + res.message);
+              }
+            },
+            error: function (xhr) {
+              console.error("背景連線失敗，無法執行自動防呆，請檢查後台狀態。");
+            },
+          });
         }
+
+        //【主動式發動機制】一載入網頁就立刻執行背景抓漏防呆！
+        runGatekeeperCheck();
+
+        // ====================================================================
+        // 點擊「預視資料表」按鈕時的作動方式
+        // ====================================================================
+        btnPreview.on("click", function () {
+          // 如果剛剛背景早就撈好且加工好了，我們就直接拿緩存成果，0秒瞬間秒開彈窗！
+          if (cachedCheckedTableHtml !== "") {
+            $("#excelPreviewContainer").html(cachedCheckedTableHtml);
+            modal.css("display", "flex");
+            return;
+          }
+
+          // 防呆：萬一網頁載入瞬間使用者點太快，緩存還沒好，則執行標準流程
+          btnPreview
+            .prop("disabled", true)
+            .html(
+              `<span><i class="fa-solid fa-hourglass fa-spin"></i> 讀取中...</span>`,
+            );
+          $.ajax({
+            url: "/api/preview_data",
+            type: "GET",
+            success: function (res) {
+              btnPreview.prop("disabled", false).html(originalPreviewText);
+              if (res.status === "success") {
+                $("#excelPreviewContainer").html(res.data);
+                modal.css("display", "flex");
+                // 順便補發一次背景掃描
+                runGatekeeperCheck();
+              } else {
+                alert("預覽失敗: " + res.message);
+              }
+            },
+            error: function (xhr) {
+              btnPreview.prop("disabled", false).html(originalPreviewText);
+              alert("伺服器連線失敗");
+            },
+          });
+        });
+
+        // 點擊右上角叉叉關閉彈窗
+        $("#closePreviewModal").on("click", function () {
+          modal.css("display", "none");
+        });
+
+        // 點擊深色陰影外圍關閉彈窗
+        $(window).on("click", function (event) {
+          if ($(event.target).is(modal)) {
+            modal.css("display", "none");
+          }
+        });
+
+        // ====================================================================
+        // 🎯 這是你原本就有的：產出最終 JSON 按鈕點擊事件 (保持原封不動)
+        // ====================================================================
+        $("#runTransform").click(function () {
+          var btn = $(this);
+          var msgEl = document.getElementById("statusMessage");
+          var selectedModel = $("#modelFile").val();
+
+          if (!selectedModel) {
+            msgEl.innerText = "請選擇一個填單Template";
+            msgEl.classList.add("login-witherror");
+            $("#modelFile").addClass("input-error");
+            return;
+          }
+
+          var formData = new FormData();
+          formData.append("modelFile", selectedModel);
+
+          btn.prop("disabled", true).html(`
+                <div class="loading-content">
+                    <span>處理中</span>
+                    <div class="spinner"></div>
+                </div>
+            `);
+          msgEl.innerText = "正在讀取伺服器資料並轉換 JSON...";
+          msgEl.classList.remove("login-witherror");
+          $("#modelFile").removeClass("input-error");
+
+          $.ajax({
+            url: "/generate_result",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+              document.open();
+              document.write(response);
+              document.close();
+              history.pushState(null, "", "/result");
+            },
+            error: function (xhr) {
+              alert("轉換失敗，請確認伺服器 excel 資料夾內是否有 data.xlsx");
+              btn.prop("disabled", false).text("產出最終 JSON");
+              msgEl.innerText = "伺服器處理錯誤";
+              msgEl.classList.add("login-witherror");
+            },
+          });
+        });
       });
     </script>
     <script>
