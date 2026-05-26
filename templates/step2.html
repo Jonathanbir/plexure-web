@@ -399,6 +399,22 @@
         display: inline-flex;
         align-items: center;
       }
+      /* 🎯 最新新增：表頭違規時的爆亮紅字與瘋狂閃爍動畫 */
+      #excelPreviewContainer th.header-error-blink {
+        color: #ff4d4d; /* 鮮紅色文字 */
+        font-weight: 900 !important;
+        text-shadow: 0 0 8px rgba(255, 77, 77, 0.6);
+        animation: textBlinkRed 0.8s infinite alternate !important; /* 0.8秒來回快速閃爍 */
+      }
+
+      @keyframes textBlinkRed {
+        0% {
+          color: #fff;
+        }
+        100% {
+          color: #ff4d4d;
+        }
+      }
     </style>
   </head>
   <body>
@@ -474,7 +490,6 @@
             id="backStep1"
             class="btn-submit btn-danger-submit"
             style="display: none"
-            onclick="window.location.href='{{ url_for('index') }}'"
           >
             請回上一步調整表單
           </button>
@@ -503,94 +518,113 @@
         var btnPreview = $("#btnPreviewExcel");
         var originalPreviewText = btnPreview.html();
 
-        // 全域暫存，用來儲存經檢查過且上好紅框的完整表格 HTML 成果
+        // 全域暫存，用來儲存經檢查過、上好格子紅框與表頭閃爍的完整表格 HTML 成果
         var cachedCheckedTableHtml = "";
 
         // ====================================================================
-        // 【核心新增】一載入網頁立刻自動執行的：智慧卡關防呆雷達 (主動掃描)
+        // 智慧卡關防呆雷達 (主動式載入背景掃描)
         // ====================================================================
         function runGatekeeperCheck() {
-          // 在背景靜悄悄讀取 API
           $.ajax({
             url: "/api/preview_data",
             type: "GET",
             success: function (res) {
               if (res.status === "success") {
-                // 建立一個隱形虛擬容器來解析表格，不影響使用者視覺
+                // 建立隱形虛擬容器來靜悄悄解析表格
                 var tempDiv = $("<div>").html(res.data);
 
-                // 你指定的黃金檢查三大欄位
+                // 定義核心三大檢查重臣
                 var requiredHeaders = ["Title EN", "Desc EN", "Terms EN"];
-                var targetIndexes = [];
 
-                // 🛰️ 雷達 A 階段：鎖定標頭位置
+                // 存放這三個欄位「各自在 Excel 的第幾欄 (Index)」，格式為：{ 'Title EN': 3, 'Desc EN': 5 }
+                var headerMap = {};
+
+                // 雷達 A 階段：精準比對並鎖定每一個必填項目的欄位編號
                 tempDiv.find("table th").each(function (index) {
                   var headerText = $.trim($(this).text());
                   if (requiredHeaders.indexOf(headerText) !== -1) {
-                    targetIndexes.push(index);
+                    headerMap[headerText] = index; // 記錄對位，例如 headerMap['Title EN'] = index
                   }
                 });
 
+                // 用來追蹤整張表「有沒有任何地方漏填」的全域錯誤燈
                 var hasAnyError = false;
 
-                // 🛰️ 雷達 B 階段：逐列檢查，滿足你說的 length === 0 (即未填) 則執行紅框與狀態警報
+                // 用來分別記錄「Title EN」、「Desc EN」、「Terms EN」各自有沒有犯規空值
+                var errorStatusByHeader = {
+                  "Title EN": false,
+                  "Desc EN": false,
+                  "Terms EN": false,
+                };
+
+                // 🛰️ 雷達 B 階段：逐列掃描每一格儲存格
                 tempDiv.find("table tbody tr").each(function () {
                   var rowCells = $(this).find("td");
 
-                  $.each(targetIndexes, function (i, colIndex) {
-                    var targetCell = rowCells.eq(colIndex);
-                    var cellText = $.trim(targetCell.text());
+                  // 遍歷我們規定的三大欄位
+                  $.each(requiredHeaders, function (i, hName) {
+                    var colIndex = headerMap[hName];
+                    if (colIndex !== undefined) {
+                      var targetCell = rowCells.eq(colIndex);
+                      var cellText = $.trim(targetCell.text());
 
-                    // 💡 判定核心：只要未填（長度為0）
-                    if (cellText.length === 0) {
-                      targetCell.addClass("empty-required-cell"); // 上網格紅框
-                      hasAnyError = true; // 觸發有錯誤旗標
+                      // 💡 抓到了！如果是空白未填
+                      if (cellText.length === 0) {
+                        targetCell.addClass("empty-required-cell"); // 格子上粗紅框
+                        errorStatusByHeader[hName] = true; // 標記這個大類別犯規了
+                        hasAnyError = true; // 觸發總體有錯誤警報
+                      }
                     }
                   });
                 });
 
-                // 將上好紅框與抓漏完成的完美表格，存進全域緩存中
+                // 雷達 C 階段：【全新進化】讓犯規的大類別表頭 (Th) 染紅並開始閃爍！
+                tempDiv.find("table th").each(function () {
+                  var headerText = $.trim($(this).text());
+                  // 如果這個表頭名稱屬於三大欄位，且剛剛被標記為有犯規空值
+                  if (errorStatusByHeader[headerText] === true) {
+                    $(this).addClass("header-error-blink"); // 🎯 穿上紅字閃爍衣服！
+                  }
+                });
+
+                // 將加工完成（格子紅框 + 表頭閃爍）的完美成品，塞進全域快取
                 cachedCheckedTableHtml = tempDiv.html();
 
-                // 🛰️ 雷達 C 階段：【遵照指定】網頁一載入，根據 hasAnyError 直接開關紅字與按鈕
+                // 🛰️ 雷達 D 階段：網頁一載入，根據 hasAnyError 直接開關紅字與控制按鈕生死
                 if (hasAnyError) {
-                  //  狀況一：發現未填項目！
-                  $("#alertMissingItems").css("display", "inline-flex"); // 點亮紅字提示 (表單有未填項目)
-                  $("#alertMissingModalItems").css("display", "inline-flex"); // 點亮紅字提示 (表單有未填項目)
-                  $("#runTransform").hide(); // 沒收、隱藏原本的「產出最終 JSON」按鈕
-                  $("#backStep1").show(); // 強制彈出紅色的「請回上一步調整表單」按鈕
+                  $("#alertMissingItems").css("display", "inline-flex"); // 1. 顯示紅字 (表單有未填項目)
+                  $("#runTransform").hide(); // 2. 隱藏原本的「產出最終 JSON」
+                  $("#backStep1").show(); // 3. 顯示紅色的「請回上一步調整表單」
                 } else {
-                  //  狀況二：大獲全勝，完全填滿
                   $("#alertMissingItems").hide();
-                  $("#alertMissingModalItems").hide();
                   $("#backStep1").hide();
-                  $("#runTransform").show(); // 安全放行，可以產出 JSON
+                  $("#runTransform").show(); // 通過考核，放行顯示產出按鈕
                 }
               } else {
                 console.error("背景自動防呆掃描失敗: " + res.message);
               }
             },
             error: function (xhr) {
-              console.error("背景連線失敗，無法執行自動防呆，請檢查後台狀態。");
+              console.error("背景連線失敗，無法執行自動防呆");
             },
           });
         }
 
-        //【主動式發動機制】一載入網頁就立刻執行背景抓漏防呆！
+        //【主動式發動機制】網頁一載入就立刻去背景抓漏防呆！
         runGatekeeperCheck();
 
         // ====================================================================
-        // 點擊「預視資料表」按鈕時的作動方式
+        // 點擊「🔍 預視資料表」按鈕時的作動方式
         // ====================================================================
         btnPreview.on("click", function () {
-          // 如果剛剛背景早就撈好且加工好了，我們就直接拿緩存成果，0秒瞬間秒開彈窗！
+          // 背景早就精準加工好了，0秒瞬間秒開高流暢彈窗！
           if (cachedCheckedTableHtml !== "") {
             $("#excelPreviewContainer").html(cachedCheckedTableHtml);
             modal.css("display", "flex");
             return;
           }
 
-          // 防呆：萬一網頁載入瞬間使用者點太快，緩存還沒好，則執行標準流程
+          // 防呆：如果載入瞬間點太快，則走標準備用流程
           btnPreview
             .prop("disabled", true)
             .html(
@@ -604,7 +638,6 @@
               if (res.status === "success") {
                 $("#excelPreviewContainer").html(res.data);
                 modal.css("display", "flex");
-                // 順便補發一次背景掃描
                 runGatekeeperCheck();
               } else {
                 alert("預覽失敗: " + res.message);
@@ -622,7 +655,7 @@
           modal.css("display", "none");
         });
 
-        // 點擊深色陰影外圍關閉彈窗
+        // 點擊深色陰影外圍貼心關閉彈窗
         $(window).on("click", function (event) {
           if ($(event.target).is(modal)) {
             modal.css("display", "none");
@@ -630,7 +663,7 @@
         });
 
         // ====================================================================
-        // 🎯 這是你原本就有的：產出最終 JSON 按鈕點擊事件 (保持原封不動)
+        // 產出最終 JSON 按鈕點擊事件 (原封不動)
         // ====================================================================
         $("#runTransform").click(function () {
           var btn = $(this);
@@ -677,6 +710,9 @@
             },
           });
         });
+      });
+      $("#backStep1").on("click", function () {
+        window.location.href = "{{ url_for('index') }}";
       });
     </script>
     <script>
