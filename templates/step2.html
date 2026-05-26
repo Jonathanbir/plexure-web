@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Plexure &ndash; Automation Bot</title>
     <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link
       rel="icon"
       href="{{ url_for('static', filename='images/favicon.ico') }}"
     />
@@ -137,6 +141,31 @@
         background: #eee;
       }
 
+      .first-input-content {
+        display: flex;
+        align-items: center;
+      }
+
+      .btn-preview {
+        margin-left: 15px;
+        margin-bottom: 8px;
+        padding: 4px 12px;
+        font-size: 13px;
+        background-color: #777;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.1s ease-in-out;
+      }
+
+      .btn-preview:hover {
+        background-color: #343a40;
+      }
+
       #modelFile {
         width: 100%;
         padding: 10px;
@@ -214,6 +243,100 @@
         background-color: #ff9966;
         cursor: not-allowed;
       }
+
+      .font-awesome-flex {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* 🎯 幫預視 Excel 表格穿衣服 */
+      #excelPreviewContainer table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        font-family: sans-serif;
+      }
+      #excelPreviewContainer th {
+        background-color: #343a40;
+        color: white;
+        position: sticky; /* 讓表頭死死固定在最上方，往下滾動時欄位名不會消失 */
+        top: -20px;
+        padding: 10px;
+        text-align: center;
+        border: 1px solid #454d55;
+      }
+      #excelPreviewContainer td {
+        padding: 8px 10px;
+        border: 1px solid #dee2e6;
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis; /* 文字如果太長，自動變千位號 ... 省略 */
+        white-space: nowrap;
+      }
+      #excelPreviewContainer tr:nth-child(even) {
+        background-color: #f8f9fa; /* 斑馬線效果，一眼看清單雙行 */
+      }
+      #excelPreviewContainer tr:hover {
+        background-color: #e9ecef; /* 滑鼠滑過去時，整行會亮起來 */
+      }
+
+      #excelPreviewModal {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+      }
+
+      .excelPreviewModal-container {
+        background-color: #fefefe;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 1200px;
+        height: 80%;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .excelPreviewModal-body {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+      }
+
+      .excelPreviewModal-body h3 {
+        margin: 0;
+        color: #333;
+      }
+
+      #closePreviewModal {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      #excelPreviewContainer {
+        flex: 1;
+        overflow: auto;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+      }
     </style>
   </head>
   <body>
@@ -250,7 +373,14 @@
         <p class="login-message" id="RequestUserPass-Message"></p>
         <div class="upload-section">
           <div class="upload-group">
-            <label>1. 資料表狀態</label>
+            <div class="first-input-content">
+              <label>1. 資料表狀態</label>
+              <button type="button" id="btnPreviewExcel" class="btn-preview">
+                <span class="font-awesome-flex"
+                  ><i class="fa-solid fa-eye"></i>預視資料表</span
+                >
+              </button>
+            </div>
             <input type="text" value="資料表已就緒" disabled />
           </div>
           <div class="upload-group">
@@ -278,6 +408,66 @@
         <p id="statusMsg" class="login-message"></p>
       </form>
     </div>
+    <div id="excelPreviewModal">
+      <div class="excelPreviewModal-container">
+        <div class="excelPreviewModal-body">
+          <h3 class="font-awesome-flex">
+            <i class="fa-solid fa-table"></i>data.xlsx 即時數據預覽
+          </h3>
+          <span id="closePreviewModal">&times;</span>
+        </div>
+        <div id="excelPreviewContainer"></div>
+      </div>
+    </div>
+    <script>
+      // ====================================================================
+      // 🎯 【最新新增】一鍵彈出大魔王資料表預視功能
+      // ====================================================================
+      var modal = $("#excelPreviewModal");
+
+      // 點擊「🔍 預視資料表」按鈕時發動
+      $("#btnPreviewExcel").on("click", function () {
+        var btn = $(this);
+        var originalText = btn.html();
+        btn
+          .prop("disabled", true)
+          .html(
+            "<span class='font-awesome-flex'><i class='fa-solid fa-hourglass-start'></i> 讀取中...</span>",
+          );
+
+        $.ajax({
+          url: "/api/preview_data",
+          type: "GET",
+          success: function (res) {
+            btn.prop("disabled", false).html(originalText);
+            if (res.status === "success") {
+              // 把後端封裝好的 HTML 表格直接倒進彈窗容器
+              $("#excelPreviewContainer").html(res.data);
+              // 把 Modal 的排版模式調整為 flex (顯示出來)
+              modal.css("display", "flex");
+            } else {
+              alert("預覽失敗: " + res.message);
+            }
+          },
+          error: function (xhr) {
+            btn.prop("disabled", false).html(originalText);
+            alert("伺服器連線失敗，請確認後台執行狀態");
+          },
+        });
+      });
+
+      // 點擊右上角叉叉「&times;」時關閉彈窗
+      $("#closePreviewModal").on("click", function () {
+        modal.css("display", "none");
+      });
+
+      // 點擊彈窗外圍深色陰影區域時，也自動貼心關閉彈窗
+      $(window).on("click", function (event) {
+        if ($(event.target).is(modal)) {
+          modal.css("display", "none");
+        }
+      });
+    </script>
     <script>
       $(document).ready(function () {
         const msgEl = document.getElementById("RequestUserPass-Message");

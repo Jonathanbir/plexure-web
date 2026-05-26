@@ -546,6 +546,28 @@ def result_get():
     # 防呆：如果使用者在 /result 頁面不小心按到重新整理，自動幫他導回 step2
     return redirect(url_for('step2'))
 
+@app.route('/api/preview_data', methods=['GET'])
+def preview_data():
+    try:
+        data_p = os.path.join(EXCEL_DIR, 'data.xlsx')
+        if not os.path.exists(data_p):
+            return jsonify({"status": "error", "message": "找不到 data.xlsx 檔案，請先回第一步轉換！"}), 404
+        
+        # 讀取 Excel 檔案
+        df = pd.read_excel(data_p)
+        
+        # 為了網頁預覽美觀，把空值 (NaN) 換成空字串
+        df = df.fillna("")
+        
+        # 使用 Pandas 內建的高級函數 direct 轉成 HTML <table> 標籤
+        # table_id 可以讓我們等一下方便用 CSS 幫表格穿衣服（漂亮花紋與滾邊）
+        html_table = df.to_html(classes='table table-striped table-hover table-bordered text-nowrap', index=False)
+        
+        return jsonify({"status": "success", "data": html_table})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/transform', methods=['POST'])
 def transform():
     if not session.get('logged_in'): return jsonify({"status": "error", "message": "請登入"}), 401
@@ -625,7 +647,7 @@ def transform():
         res = df.apply(process_combo_and_prices_row, axis=1)
         out["Product Code Buy"] = [r[0] for r in res]
         out["Product Code Discounted"] = [r[1] for r in res]
-        out["Percentage"] = [r[2] for r in res] # 這裡就會把完美處理好的 "67,32" 直接灌進 data.xlsx 的第 L 欄！
+        out["Additional Value"] = [r[2] for r in res] # 這裡就會把完美處理好的 "67,32" 直接灌進 data.xlsx 的第 L 欄！
         out["Promotional Image En"] = df.iloc[:, 49].apply(get_img)
         out["Promotional Image Zh"] = df.iloc[:, 50].apply(get_img)
         out["Title EN"] = df.iloc[:, 31].apply(clean_empty_text)
