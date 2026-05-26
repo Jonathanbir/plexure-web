@@ -614,17 +614,63 @@
         runGatekeeperCheck();
 
         // ====================================================================
-        // 點擊「🔍 預視資料表」按鈕時的作動方式
+        // 點擊「預視資料表」按鈕時的作動方式
         // ====================================================================
         btnPreview.on("click", function () {
-          // 背景早就精準加工好了，0秒瞬間秒開高流暢彈窗！
+          // 封裝一個專門用來自動滾動到 Title EN / 錯誤欄位的智慧導航小火箭
+          // ====================================================================
+          // 【高精度優先級版】智慧火箭導航自動定位
+          // ====================================================================
+          function scrollToTargetColumn() {
+            var targetTh = null;
+
+            // 1. 定義錯誤攔截優先級順序
+            var priorityOrder = ["Title EN", "Desc EN", "Terms EN"];
+
+            // 2. 依照順序逐一掃描，誰先犯規閃爍，導航就第一優先鎖定誰！
+            $.each(priorityOrder, function (i, hName) {
+              $("#excelPreviewContainer table th.header-error-blink").each(
+                function () {
+                  if ($.trim($(this).text()) === hName) {
+                    targetTh = $(this); // 鎖定目標
+                    return false; // 找到目標，中斷內層 each 迴圈
+                  }
+                },
+              );
+              if (targetTh) return false; // 成功攔截優先級，中斷外層 each 迴圈
+            });
+
+            // 3. 發動自動絲滑橫向滾動（只有真的有錯漏、targetTh 存在時才發動！）
+            if (targetTh && targetTh.length > 0) {
+              var container = $("#excelPreviewContainer");
+
+              // 計算目標 Th 相對於滾動容器左側的精準距離
+              var scrollTarget =
+                targetTh.position().left + container.scrollLeft() - 180; // -40 留點黃金左邊距
+
+              // 讓 X 軸在 500 毫秒內絲滑平移
+              container.animate(
+                {
+                  scrollLeft: scrollTarget,
+                },
+                500,
+              );
+            }
+          }
+
+          // 狀況 A：背景早就精準加工好了，0秒瞬間秒開高流暢彈窗！
           if (cachedCheckedTableHtml !== "") {
             $("#excelPreviewContainer").html(cachedCheckedTableHtml);
             modal.css("display", "flex");
+
+            // 彈窗一開，立刻發動自動導航火箭滾動！
+            setTimeout(function () {
+              scrollToTargetColumn();
+            }, 150); // 貼心延遲 150 毫秒，等彈窗動畫完全展開後滾動最穩定
             return;
           }
 
-          // 防呆：如果載入瞬間點太快，則走標準備用流程
+          // 狀況 B：防呆備用流程（使用者點太快）
           btnPreview
             .prop("disabled", true)
             .html(
@@ -638,7 +684,14 @@
               if (res.status === "success") {
                 $("#excelPreviewContainer").html(res.data);
                 modal.css("display", "flex");
+
+                // 先補發一次背景掃描
                 runGatekeeperCheck();
+
+                // 備用流程同樣發動自動滾動
+                setTimeout(function () {
+                  scrollToTargetColumn();
+                }, 200);
               } else {
                 alert("預覽失敗: " + res.message);
               }
@@ -667,7 +720,7 @@
         // ====================================================================
         $("#runTransform").click(function () {
           var btn = $(this);
-          var msgEl = document.getElementById("statusMessage");
+          var msgEl = document.getElementById("RequestUserPass-Message");
           var selectedModel = $("#modelFile").val();
 
           if (!selectedModel) {
